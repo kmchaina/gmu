@@ -20,3 +20,10 @@ Schedule::command('gmu:send-weekly-digest')
     ->weeklyOn(1, '08:00')
     ->timezone('Africa/Dar_es_Salaam')
     ->appendOutputTo(storage_path('logs/weekly-digest.log'));
+
+// Flag compliance deliverables that slipped past their due date, and tell the
+// GMU office. Runs before the reminder job so the two agree (finding M6).
+Schedule::command('gmu:mark-overdue')
+    ->dailyAt('06:45')
+    ->timezone('Africa/Dar_es_Salaam')
+    ->appendOutputTo(storage_path('logs/compliance-overdue.log'));

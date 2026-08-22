@@ -229,28 +229,246 @@
             @endif
         </div>
 
-        {{-- Team Members --}}
-        @if($proposal->teamMembers->count() > 0)
-        <div class="card card-outline card-info">
-            <div class="card-header"><h3 class="card-title"><i class="fas fa-users mr-1"></i>Research Team</h3></div>
+        {{-- Institutional approval: DRCP then DG, then the donor (finding M9) --}}
+        <div class="card card-outline card-success">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-stamp mr-1"></i>Institutional Approval</h3>
+            </div>
+            <div class="card-body">
+                @php
+                    $drcp = $proposal->approvals->firstWhere('level', 'drcp');
+                    $dg   = $proposal->approvals->firstWhere('level', 'dg');
+                @endphp
+
+                <div class="row text-center mb-3">
+                    <div class="col-4">
+                        <div class="small text-muted text-uppercase">Internal review</div>
+                        <span class="badge badge-{{ $proposal->isReviewComplete() ? 'success' : 'secondary' }}">
+                            {{ $proposal->isReviewComplete() ? 'Complete' : 'In progress' }}
+                        </span>
+                    </div>
+                    <div class="col-4">
+                        <div class="small text-muted text-uppercase">DRCP</div>
+                        <span class="badge badge-{{ $drcp?->status === 'approved' ? 'success' : ($drcp?->status === 'returned' ? 'danger' : 'secondary') }}">
+                            {{ $drcp ? ucfirst($drcp->status) : 'Pending' }}
+                        </span>
+                    </div>
+                    <div class="col-4">
+                        <div class="small text-muted text-uppercase">Director General</div>
+                        <span class="badge badge-{{ $dg?->status === 'approved' ? 'success' : ($dg?->status === 'returned' ? 'danger' : 'secondary') }}">
+                            {{ $dg ? ucfirst($dg->status) : 'Pending' }}
+                        </span>
+                    </div>
+                </div>
+
+                @foreach($proposal->approvals as $approval)
+                    <div class="border-top pt-2 mt-2 small">
+                        <strong>{{ $approval->levelName() }}</strong> —
+                        {{ ucfirst($approval->status) }}
+                        by {{ $approval->decidedBy?->name ?? 'unknown' }}
+                        on {{ $approval->decided_at?->format('j M Y') }}
+                        @if($approval->letter_of_support_issued)
+                            <span class="badge badge-info ml-1">Letter of Support issued</span>
+                        @endif
+                        @if($approval->comments)
+                            <div class="text-muted">{{ $approval->comments }}</div>
+                        @endif
+                    </div>
+                @endforeach
+
+                @if(! $proposal->isReviewComplete())
+                    <p class="text-muted small mb-0">
+                        All three internal reviews must be approved before the proposal goes for institutional sign-off.
+                    </p>
+                @elseif($proposal->isClearedForSubmission())
+                    <div class="alert alert-success mb-0 mt-2 py-2">
+                        <i class="fas fa-check-circle mr-1"></i>Cleared for submission to the donor.
+                    </div>
+                @endif
+
+                @if(($awaitingApproval === 'drcp' && $canApproveDrcp) || ($awaitingApproval === 'dg' && $canApproveDg))
+                    <form method="POST" action="{{ route('proposals.approval', $proposal) }}" class="mt-3 border-top pt-3">
+                        @csrf
+                        <input type="hidden" name="level" value="{{ $awaitingApproval }}">
+                        <div class="form-group mb-2">
+                            <label class="small text-uppercase text-muted">
+                                Decision — {{ \App\Models\ProposalApproval::LEVELS[$awaitingApproval] }}
+                            </label>
+                            <select name="status" class="form-control form-control-sm">
+                                <option value="approved">Approve</option>
+                                <option value="returned">Return to the team</option>
+                            </select>
+                        </div>
+                        <div class="form-group mb-2">
+                            <textarea name="comments" rows="2" class="form-control form-control-sm"
+                                      placeholder="Comments (optional)"></textarea>
+                        </div>
+                        @if($awaitingApproval === 'dg')
+                        <div class="form-check mb-2">
+                            <input type="checkbox" name="letter_of_support_issued" value="1"
+                                   class="form-check-input" id="losIssued">
+                            <label class="form-check-label small" for="losIssued">Letter of Support issued</label>
+                        </div>
+                        @endif
+                        <button class="btn btn-sm btn-success">
+                            <i class="fas fa-stamp mr-1"></i>Record decision
+                        </button>
+                    </form>
+                @endif
+            </div>
+        </div>
+
+        {{-- Proposal Documents (finding M7) --}}
+        <div class="card card-outline card-primary">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title"><i class="fas fa-paperclip mr-1"></i>Proposal Documents</h3>
+                @if($canManage)
+                <button class="btn btn-xs btn-primary" data-toggle="collapse" data-target="#addDocument">
+                    <i class="fas fa-plus mr-1"></i>Attach
+                </button>
+                @endif
+            </div>
+
+            @if($canManage)
+            <div class="collapse" id="addDocument">
+                <div class="card-body border-bottom bg-light">
+                    <form method="POST" action="{{ route('proposals.documents.store', $proposal) }}" enctype="multipart/form-data">
+                        @csrf
+                        <div class="form-row">
+                            <div class="col-md-5 mb-2">
+                                <input type="text" name="title" class="form-control form-control-sm"
+                                       placeholder="Document title" value="{{ old('title') }}" required>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <select name="document_type" class="form-control form-control-sm" required>
+                                    @foreach($documentTypes as $value => $label)
+                                        <option value="{{ $value }}">{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <input type="file" name="file" class="form-control-file form-control-sm" required>
+                            </div>
+                            <div class="col-md-1 mb-2">
+                                <button class="btn btn-sm btn-primary btn-block">Save</button>
+                            </div>
+                        </div>
+                        @error('file')<small class="text-danger d-block">{{ $message }}</small>@enderror
+                    </form>
+                </div>
+            </div>
+            @endif
+
             <div class="card-body p-0">
                 <table class="table table-sm mb-0">
                     <thead class="thead-light">
-                        <tr><th>Name</th><th>Role</th><th>Department</th></tr>
+                        <tr><th>Document</th><th>Type</th><th>Version</th><th>Uploaded by</th><th></th></tr>
                     </thead>
                     <tbody>
+                        @forelse($proposal->documents->sortByDesc('created_at') as $doc)
+                        <tr>
+                            <td>
+                                <a href="{{ route('proposals.documents.download', [$proposal, $doc]) }}">
+                                    <i class="fas fa-file-alt mr-1 text-muted"></i>{{ $doc->title }}
+                                </a>
+                                <br><small class="text-muted">{{ $doc->file_name }} · {{ number_format(($doc->file_size ?? 0) / 1024, 0) }} KB</small>
+                            </td>
+                            <td><span class="badge badge-light">{{ $documentTypes[$doc->document_type] ?? $doc->document_type }}</span></td>
+                            <td>v{{ $doc->version }}</td>
+                            <td>{{ $doc->uploadedBy?->name ?? '-' }}</td>
+                            <td class="text-right">
+                                @if($canManage)
+                                <form method="POST" action="{{ route('proposals.documents.destroy', [$proposal, $doc]) }}"
+                                      onsubmit="return confirm('Remove this document?');">
+                                    @csrf @method('DELETE')
+                                    <button class="btn btn-xs btn-outline-danger"><i class="fas fa-trash"></i></button>
+                                </form>
+                                @endif
+                            </td>
+                        </tr>
+                        @empty
+                        <tr><td colspan="5" class="text-center text-muted py-3">
+                            No documents attached yet — the concept note, budget and letters of support belong here.
+                        </td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {{-- Research Team (finding M7) --}}
+        <div class="card card-outline card-info">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title"><i class="fas fa-users mr-1"></i>Research Team</h3>
+                @if($canManage && $availableMembers->isNotEmpty())
+                <button class="btn btn-xs btn-info" data-toggle="collapse" data-target="#addMember">
+                    <i class="fas fa-user-plus mr-1"></i>Add member
+                </button>
+                @endif
+            </div>
+
+            @if($canManage && $availableMembers->isNotEmpty())
+            <div class="collapse" id="addMember">
+                <div class="card-body border-bottom bg-light">
+                    <form method="POST" action="{{ route('proposals.team.store', $proposal) }}">
+                        @csrf
+                        <div class="form-row">
+                            <div class="col-md-7 mb-2">
+                                <select name="user_id" class="form-control form-control-sm" required>
+                                    @foreach($availableMembers as $candidate)
+                                        <option value="{{ $candidate->id }}">
+                                            {{ $candidate->name }}@if($candidate->department) — {{ $candidate->department }}@endif
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <select name="role" class="form-control form-control-sm">
+                                    <option value="co_investigator">Co-investigator</option>
+                                    <option value="collaborator">Collaborator</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2 mb-2">
+                                <button class="btn btn-sm btn-info btn-block">Add</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            @endif
+
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead class="thead-light">
+                        <tr><th>Name</th><th>Role</th><th>Department</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>{{ $proposal->leadPi?->name }}</strong></td>
+                            <td><span class="badge badge-primary">Lead PI</span></td>
+                            <td>{{ $proposal->leadPi?->department ?? '-' }}</td>
+                            <td></td>
+                        </tr>
                         @foreach($proposal->teamMembers as $member)
                         <tr>
-                            <td><strong>{{ $member->user->name }}</strong></td>
+                            <td>{{ $member->user->name }}</td>
                             <td><span class="badge badge-secondary">{{ ucfirst(str_replace('_',' ',$member->role)) }}</span></td>
                             <td>{{ $member->user->department ?? '-' }}</td>
+                            <td class="text-right">
+                                @if($canManage)
+                                <form method="POST" action="{{ route('proposals.team.destroy', [$proposal, $member]) }}"
+                                      onsubmit="return confirm('Remove this team member?');">
+                                    @csrf @method('DELETE')
+                                    <button class="btn btn-xs btn-outline-danger"><i class="fas fa-times"></i></button>
+                                </form>
+                                @endif
+                            </td>
                         </tr>
                         @endforeach
                     </tbody>
                 </table>
             </div>
         </div>
-        @endif
 
     </div>
 

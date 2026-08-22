@@ -152,6 +152,21 @@
                     </select>
                 </div>
 
+
+                <div class="form-group">
+                    <label>Reporting Frequency</label>
+                    <select name="reporting_frequency" class="form-control">
+                        @foreach(\App\Services\ComplianceScheduleGenerator::frequencies() as $value => $label)
+                            <option value="{{ $value }}" {{ old('reporting_frequency', 'quarterly') === $value ? 'selected' : '' }}>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                    <small class="form-text text-muted">
+                        The reporting calendar is generated from this: a technical and a financial
+                        report per period, each due 30 days after the period closes, plus the kickoff,
+                        mid-term visit and closeout milestones.
+                    </small>
+                </div>
+
                 <div class="form-group">
                     <label>Signed Contract</label>
                     <div class="custom-file">

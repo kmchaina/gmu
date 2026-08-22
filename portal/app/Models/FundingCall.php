@@ -30,6 +30,7 @@ class FundingCall extends Model
         'deadline' => 'date',
         'open_date' => 'date',
         'estimated_budget' => 'decimal:2',
+        'base_estimated_budget' => 'decimal:2',
     ];
 
     public function donor() { return $this->belongsTo(Donor::class); }

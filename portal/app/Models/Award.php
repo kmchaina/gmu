@@ -18,7 +18,7 @@ class Award extends Model
     protected $fillable = [
         'proposal_id', 'donor_id', 'contract_number', 'title', 'start_date', 'end_date',
         'total_budget', 'currency', 'status', 'signed_contract', 'kickoff_date', 'notes',
-        'exchange_rate', 'base_total_budget',
+        'exchange_rate', 'base_total_budget', 'reporting_frequency', 'schedule_generated',
     ];
 
     /** Contract amount => reporting-currency equivalent (finding M3). */
@@ -29,6 +29,8 @@ class Award extends Model
         'end_date' => 'date',
         'kickoff_date' => 'date',
         'total_budget' => 'decimal:2',
+        'base_total_budget' => 'decimal:2',
+        'schedule_generated' => 'boolean',
     ];
 
     public function proposal() { return $this->belongsTo(Proposal::class); }

@@ -64,6 +64,31 @@ class ProposalPolicy
         return ! $this->belongsToTeam($user, $proposal);
     }
 
+    /**
+     * Record an institutional decision at a given level (finding M9).
+     *
+     * The Directorate and the Director General each sign their own step; the
+     * Coordinator may record a decision on their behalf, which the audit log
+     * attributes to whoever was signed in.
+     */
+    public function approveAt(User $user, Proposal $proposal, string $level): bool
+    {
+        if (! $this->isReviewComplete($proposal)) {
+            return false;
+        }
+
+        return match ($level) {
+            'drcp' => $user->hasAnyRole(['drcp', 'coordinator']),
+            'dg'   => $user->hasRole('dg'),
+            default => false,
+        };
+    }
+
+    private function isReviewComplete(Proposal $proposal): bool
+    {
+        return $proposal->isReviewComplete();
+    }
+
     /** Attach concept notes, budgets, letters of support. */
     public function manageDocuments(User $user, Proposal $proposal): bool
     {

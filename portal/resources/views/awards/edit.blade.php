@@ -144,6 +144,15 @@
                 </div>
 
                 <div class="form-group">
+                    <label>Reporting Frequency</label>
+                    <select name="reporting_frequency" class="form-control">
+                        @foreach(\App\Services\ComplianceScheduleGenerator::frequencies() as $value => $label)
+                            <option value="{{ $value }}" {{ old('reporting_frequency', $award->reporting_frequency) === $value ? 'selected' : '' }}>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="form-group">
                     <label>Replace Signed Contract</label>
                     @if($award->signed_contract)
                         <div class="mb-2">

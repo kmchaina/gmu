@@ -6,6 +6,7 @@ use App\Models\Report;
 use App\Models\Award;
 use App\Support\UploadRules;
 use App\Support\GrantFiles;
+use App\Services\Notifier;
 use Illuminate\Http\Request;
 
 class ReportsController extends Controller
@@ -131,7 +132,13 @@ class ReportsController extends Controller
             $data['verified_at'] = now();
         }
 
+        $statusChanged = $report->status !== $data['status'];
+
         $report->update($data);
+
+        if ($statusChanged && in_array($report->status, ['approved', 'rejected'], true)) {
+            app(Notifier::class)->reportDecision($report->fresh(['submittedBy', 'award.proposal.leadPi']));
+        }
 
         return redirect()->route('reports.show', $report)
             ->with('success', 'Report updated successfully.');

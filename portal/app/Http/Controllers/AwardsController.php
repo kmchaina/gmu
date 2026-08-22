@@ -7,6 +7,8 @@ use App\Models\Donor;
 use App\Models\Proposal;
 use App\Support\UploadRules;
 use App\Support\GrantFiles;
+use App\Services\ComplianceScheduleGenerator;
+use App\Services\Notifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -81,6 +83,7 @@ class AwardsController extends Controller
             'total_budget'    => 'required|numeric|min:0',
             'currency'        => 'required|string|max:10',
             'status'          => 'required|in:active,completed,suspended,terminated',
+            'reporting_frequency' => 'required|in:monthly,quarterly,semi_annual,annual',
             'kickoff_date'    => 'nullable|date',
             'notes'           => 'nullable|string',
             'signed_contract' => UploadRules::office(),
@@ -94,8 +97,20 @@ class AwardsController extends Controller
 
         Proposal::find($request->proposal_id)?->update(['status' => 'awarded']);
 
-        return redirect()->route('awards.show', $award)
-            ->with('success', 'Award created successfully.');
+        // Finding M6: step B6 of the business process framework — the compliance
+        // calendar is generated when the award is set up, not typed in by hand.
+        $schedule = app(ComplianceScheduleGenerator::class)->generate($award);
+
+        app(Notifier::class)->awardCreated($award->load('proposal.leadPi', 'proposal.assignedOfficer'));
+
+        return redirect()->route('awards.show', $award)->with(
+            'success',
+            sprintf(
+                'Award created. %d reporting deadline(s) and %d compliance milestone(s) added to the calendar.',
+                $schedule['reports'],
+                $schedule['compliance']
+            )
+        );
     }
 
     public function show(Award $award)
@@ -127,6 +142,7 @@ class AwardsController extends Controller
             'total_budget'    => 'required|numeric|min:0',
             'currency'        => 'required|string|max:10',
             'status'          => 'required|in:active,completed,suspended,terminated',
+            'reporting_frequency' => 'required|in:monthly,quarterly,semi_annual,annual',
             'kickoff_date'    => 'nullable|date',
             'notes'           => 'nullable|string',
             'signed_contract' => UploadRules::office(),

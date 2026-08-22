@@ -15,7 +15,7 @@ class User extends Authenticatable
     use HasFactory, Notifiable, SoftDeletes, LogsActivity;
 
     /** Roles that make up the GMU itself, as opposed to the researchers it serves. */
-    public const GMU_STAFF = ['coordinator', 'planning_officer', 'finance_officer', 'legal_officer', 'secretary'];
+    public const GMU_STAFF = ['coordinator', 'planning_officer', 'finance_officer', 'legal_officer', 'secretary', 'drcp', 'dg'];
 
     /** Roles that lead or contribute to research. */
     public const RESEARCH_ROLES = ['pi', 'research_scientist'];

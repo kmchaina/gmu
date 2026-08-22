@@ -6,6 +6,7 @@ use App\Models\Proposal;
 use App\Models\FundingCall;
 use App\Models\ProposalReview;
 use App\Models\User;
+use App\Services\Notifier;
 use Illuminate\Http\Request;
 
 class ProposalsController extends Controller
@@ -87,7 +88,10 @@ class ProposalsController extends Controller
     {
         $this->authorize('view', $proposal);
 
-        $proposal->load('fundingCall.donor', 'leadPi', 'assignedOfficer', 'teamMembers.user', 'reviews.reviewer', 'documents', 'award');
+        $proposal->load([
+            'fundingCall.donor', 'leadPi', 'assignedOfficer', 'teamMembers.user',
+            'reviews.reviewer', 'documents.uploadedBy', 'award',
+        ]);
 
         $user = auth()->user();
 
@@ -100,7 +104,28 @@ class ProposalsController extends Controller
             ? $proposal->reviews->firstWhere('review_type', $reviewType)
             : null;
 
-        return view('proposals.show', compact('proposal', 'canReview', 'userReview'));
+        $proposal->load('approvals.decidedBy');
+        $awaitingApproval = $proposal->awaitingApprovalAt();
+        $canApproveDrcp   = $user->can('approveAt', [$proposal, 'drcp']);
+        $canApproveDg     = $user->can('approveAt', [$proposal, 'dg']);
+
+        $canManage     = $user->can('manageDocuments', $proposal);
+        $documentTypes = ProposalDocumentsController::TYPES;
+
+        // Colleagues who could join the team: researchers not already on it.
+        $availableMembers = $canManage
+            ? User::whereHas('role', fn($q) => $q->whereIn('name', User::RESEARCH_ROLES))
+                ->where('is_active', true)
+                ->where('id', '!=', $proposal->lead_pi_id)
+                ->whereNotIn('id', $proposal->teamMembers->pluck('user_id'))
+                ->orderBy('name')
+                ->get()
+            : collect();
+
+        return view('proposals.show', compact(
+            'proposal', 'canReview', 'userReview', 'canManage', 'documentTypes', 'availableMembers',
+            'awaitingApproval', 'canApproveDrcp', 'canApproveDg'
+        ));
     }
 
     public function edit(Proposal $proposal)
@@ -136,7 +161,17 @@ class ProposalsController extends Controller
             'assigned_officer_id'   => 'nullable|exists:users,id',
         ]);
 
+        $previousStatus = $proposal->status;
+
         $proposal->update($data);
+
+        if ($previousStatus !== $proposal->status) {
+            app(Notifier::class)->proposalStatusChanged($proposal, $previousStatus, $proposal->status);
+
+            if ($proposal->status === 'internal_review') {
+                $this->requestReviews($proposal);
+            }
+        }
 
         return redirect()->route('proposals.show', $proposal)
             ->with('success', 'Proposal updated successfully.');
@@ -175,23 +210,68 @@ class ProposalsController extends Controller
             ]
         );
 
-        if ($proposal->isReviewComplete()) {
+        $notifier = app(Notifier::class);
+        $previous = $proposal->status;
+
+        if ($request->status === 'needs_revision') {
+            // Finding M9: a rejected review sent the proposal nowhere. It now
+            // goes back to the team to be worked on.
+            $proposal->update(['status' => 'under_development']);
+        } elseif ($proposal->isReviewComplete()) {
             $proposal->update(['status' => 'approved']);
-        } elseif ($proposal->status === 'concept' || $proposal->status === 'under_development') {
+        } elseif (in_array($proposal->status, ['concept', 'under_development'], true)) {
             $proposal->update(['status' => 'internal_review']);
+            $this->requestReviews($proposal);
+        }
+
+        if ($proposal->status !== $previous) {
+            $notifier->proposalStatusChanged($proposal->fresh(), $previous, $proposal->status);
         }
 
         return redirect()->route('proposals.show', $proposal)
             ->with('success', 'Review submitted successfully.');
     }
 
+    /**
+     * Open the three review tracks, unassigned.
+     *
+     * Finding M9: reviews used to be stamped with whoever created the proposal
+     * as reviewer, so the audit trail named the wrong person until someone
+     * actually filed the review. They now start empty and are claimed by the
+     * officer who holds the track.
+     */
     private function initializeReviews(Proposal $proposal): void
     {
-        foreach (['technical', 'compliance', 'budget'] as $type) {
+        foreach (array_values(User::REVIEW_TRACKS) as $type) {
             ProposalReview::firstOrCreate(
                 ['proposal_id' => $proposal->id, 'review_type' => $type],
-                ['reviewer_id' => auth()->id(), 'status' => 'pending']
+                ['reviewer_id' => null, 'status' => 'pending']
             );
+        }
+    }
+
+    /**
+     * Tell the officers who own each outstanding track that a proposal is
+     * waiting on them (finding M4/M9).
+     */
+    private function requestReviews(Proposal $proposal): void
+    {
+        $notifier  = app(Notifier::class);
+        $completed = $proposal->reviews()->whereNotNull('reviewed_at')->pluck('review_type')->all();
+
+        foreach (User::REVIEW_TRACKS as $role => $track) {
+            if (in_array($track, $completed, true)) {
+                continue;
+            }
+
+            $reviewers = User::whereHas('role', fn($q) => $q->where('name', $role))
+                ->where('is_active', true)
+                ->where('id', '!=', $proposal->lead_pi_id)
+                ->get();
+
+            foreach ($reviewers as $reviewer) {
+                $notifier->reviewRequested($proposal, $reviewer, $track);
+            }
         }
     }
 }

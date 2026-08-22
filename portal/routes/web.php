@@ -4,6 +4,9 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\CallsController;
 use App\Http\Controllers\DonorsController;
+use App\Http\Controllers\ProposalApprovalsController;
+use App\Http\Controllers\ProposalDocumentsController;
+use App\Http\Controllers\ProposalTeamController;
 use App\Http\Controllers\ProposalsController;
 use App\Http\Controllers\AwardsController;
 use App\Http\Controllers\AwardBudgetsController;
@@ -38,6 +41,18 @@ Route::middleware(['auth'])->group(function () {
     Route::post('calls/{call}/select-team',  [CallsController::class, 'selectTeam'])->name('calls.select-team');
     Route::resource('proposals', ProposalsController::class);
     Route::post('proposals/{proposal}/review', [ProposalsController::class, 'submitReview'])->name('proposals.review');
+    Route::post('proposals/{proposal}/approval', [ProposalApprovalsController::class, 'store'])->name('proposals.approval');
+
+    // Proposal artefacts and team — the pre-award records that had models and
+    // tables but no way to create them (finding M7).
+    Route::scopeBindings()->group(function () {
+        Route::post('proposals/{proposal}/documents',                [ProposalDocumentsController::class, 'store'])->name('proposals.documents.store');
+        Route::get('proposals/{proposal}/documents/{document}',      [ProposalDocumentsController::class, 'download'])->name('proposals.documents.download');
+        Route::delete('proposals/{proposal}/documents/{document}',   [ProposalDocumentsController::class, 'destroy'])->name('proposals.documents.destroy');
+
+        Route::post('proposals/{proposal}/team',                     [ProposalTeamController::class, 'store'])->name('proposals.team.store');
+        Route::delete('proposals/{proposal}/team/{member}',          [ProposalTeamController::class, 'destroy'])->name('proposals.team.destroy');
+    });
     Route::resource('awards', AwardsController::class);
     Route::get('awards/{award}/contract',     [AwardsController::class, 'downloadContract'])->name('awards.contract');
 

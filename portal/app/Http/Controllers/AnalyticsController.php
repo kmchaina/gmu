@@ -41,13 +41,13 @@ class AnalyticsController extends Controller
             ->pluck('total', 'status');
 
         // ── Awards per Year (bar) ────────────────────────────────────────────
-        $awardsPerYear = Award::select(
-                DB::raw('YEAR(created_at) as year'),
-                DB::raw('count(*) as total')
-            )
-            ->groupBy('year')
-            ->orderBy('year')
-            ->pluck('total', 'year');
+        // Finding M12: YEAR() is MySQL-only, and the grant year is the year the
+        // award started, not the day somebody typed the record in.
+        $awardsPerYear = Award::whereNotNull('start_date')
+            ->get(['start_date'])
+            ->groupBy(fn($award) => $award->start_date->format('Y'))
+            ->map->count()
+            ->sortKeys();
 
         // ── Funding by Donor (horizontal bar, top 8) ─────────────────────────
         // Finding M3: summed in the reporting currency, not raw contract amounts.

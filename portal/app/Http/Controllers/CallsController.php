@@ -7,6 +7,7 @@ use App\Models\Donor;
 use App\Models\CallInterest;
 use App\Support\UploadRules;
 use App\Support\GrantFiles;
+use App\Services\Notifier;
 use Illuminate\Http\Request;
 
 class CallsController extends Controller
@@ -76,7 +77,12 @@ class CallsController extends Controller
             $data['call_document'] = GrantFiles::store($request->file('call_document'), 'call-documents');
         }
 
-        FundingCall::create($data);
+        $call = FundingCall::create($data);
+
+        // Researchers only hear about a call once it is actually open.
+        if ($call->status === 'open') {
+            app(Notifier::class)->callPosted($call->load('donor'));
+        }
 
         return redirect()->route('calls.index')
             ->with('success', 'Funding call posted successfully.');
@@ -187,26 +193,28 @@ class CallsController extends Controller
             'gmu_notes'           => 'nullable|string',
         ]);
 
-        $allInterests = $call->interests;
+        $notifier = app(Notifier::class);
+        $notified = 0;
 
-        foreach ($allInterests as $interest) {
-            if (in_array($interest->user_id, $request->selected_user_ids)) {
-                $interest->update([
+        foreach ($call->interests as $interest) {
+            $interest->update(in_array($interest->user_id, $request->selected_user_ids)
+                ? [
                     'status'     => 'selected',
                     'gmu_notes'  => $request->gmu_notes,
                     'decided_at' => now(),
                     'decided_by' => auth()->id(),
-                ]);
-            } else {
-                $interest->update([
+                ]
+                : [
                     'status'     => 'not_selected',
                     'decided_at' => now(),
                     'decided_by' => auth()->id(),
                 ]);
-            }
+
+            $interest->setRelation('fundingCall', $call);
+            $notified += $notifier->interestDecision($interest);
         }
 
         return redirect()->route('calls.show', $call)
-            ->with('success', 'Team selection saved. Researchers have been notified.');
+            ->with('success', "Team selection saved. {$notified} researcher(s) notified.");
     }
 }

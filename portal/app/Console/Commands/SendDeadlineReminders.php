@@ -7,140 +7,222 @@ use App\Models\ComplianceCalendar;
 use App\Models\EthicsRenewal;
 use App\Models\Report;
 use App\Models\User;
+use App\Services\Notifier;
+use App\Support\Days;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
+/**
+ * Deadline reminders for reports, compliance deliverables and ethics renewals.
+ *
+ * Audit finding M8: this used to match an exact single day — "due 30 days from
+ * today" — so if the scheduler did not run that morning (server off, cron
+ * missed) the window was skipped permanently. Windows are now "due within N
+ * days and not yet reminded", which self-heals after an outage.
+ *
+ * Mail is also no longer able to take the whole run down: a failure for one
+ * recipient is logged and the rest continue. Every reminder additionally
+ * creates an in-app notification, which does not depend on SMTP at all
+ * (finding M4).
+ */
 class SendDeadlineReminders extends Command
 {
-    protected $signature   = 'gmu:send-deadline-reminders';
-    protected $description = 'Send deadline reminder emails for reports, compliance events, and ethics renewals.';
+    protected $signature   = 'gmu:send-deadline-reminders {--dry-run : List what would be sent without sending}';
+    protected $description = 'Send deadline reminders for reports, compliance events, and ethics renewals.';
 
-    // Reports & compliance: 30/14/7-day windows
-    private const REPORT_WINDOWS     = [30, 14, 7];
-    // Ethics renewals: 60/30-day windows (longer lead time for regulatory renewal)
-    private const ETHICS_WINDOWS     = [60, 30];
+    /** Reports and compliance deliverables: 30/14/7-day windows. */
+    private const REPORT_WINDOWS = [30, 14, 7];
 
-    public function handle(): int
+    /** Ethics renewals need a longer lead time for the regulator. */
+    private const ETHICS_WINDOWS = [60, 30];
+
+    private int $emails = 0;
+    private int $notifications = 0;
+    private int $failures = 0;
+
+    public function handle(Notifier $notifier): int
     {
-        $totalSent = 0;
+        $dryRun = (bool) $this->option('dry-run');
 
-        // ── Reports ──────────────────────────────────────────────────────────
+        $this->remindReports($notifier, $dryRun);
+        $this->remindCompliance($notifier, $dryRun);
+        $this->remindEthics($notifier, $dryRun);
+
+        $this->info(sprintf(
+            '%s%d email(s), %d in-app notification(s), %d failure(s).',
+            $dryRun ? '[dry run] ' : '',
+            $this->emails,
+            $this->notifications,
+            $this->failures
+        ));
+
+        return self::SUCCESS;
+    }
+
+    private function remindReports(Notifier $notifier, bool $dryRun): void
+    {
         foreach (self::REPORT_WINDOWS as $days) {
-            $flag  = "reminder_sent_{$days}";
-            [$start, $end] = $this->window($days);
+            $flag = "reminder_sent_{$days}";
 
             $reports = Report::with('award.proposal.leadPi')
                 ->where('status', 'pending')
-                ->whereBetween('due_date', [$start, $end])
+                ->whereDate('due_date', '>=', now()->toDateString())
+                ->whereDate('due_date', '<=', now()->addDays($days)->toDateString())
                 ->where($flag, false)
                 ->get();
 
-            // Group by PI so each PI gets one consolidated email per window
-            foreach ($reports->groupBy(fn($r) => optional($r->award->proposal->leadPi)->id) as $piId => $group) {
-                if (!$piId) continue;
+            foreach ($reports->groupBy(fn($r) => $r->award?->proposal?->leadPi?->id) as $piId => $group) {
+                if (! $piId) {
+                    continue;
+                }
+
                 $pi = $group->first()->award->proposal->leadPi;
+
                 $reminders = $group->map(fn($r) => [
                     'type'        => 'report',
                     'label'       => ucfirst($r->report_type) . ' Report – ' . $r->title,
                     'due'         => $r->due_date,
-                    'days'        => $days,
+                    'days'        => Days::until($r->due_date),
                     'award_title' => $r->award->title,
                 ])->values()->all();
 
-                Mail::to($pi->email)->send(new DeadlineReminderMail($pi->name, $reminders, $days));
-                $group->each->update([$flag => true]);
-                $totalSent++;
+                if ($dryRun) {
+                    $this->line("  would remind {$pi->name} about {$group->count()} report(s) [{$days}-day window]");
+                    continue;
+                }
+
+                $this->mail($pi, $reminders, $days);
+
+                foreach ($group as $report) {
+                    $this->notifications += $notifier->reportDue($report, Days::until($report->due_date));
+                    $report->update([$flag => true]);
+                }
             }
 
-            // Also notify GMU staff once per window if there's anything due
-            if ($reports->isNotEmpty()) {
-                $this->notifyStaff($days, $reports->map(fn($r) => [
+            if ($reports->isNotEmpty() && ! $dryRun) {
+                $this->notifyOffice($days, $reports->map(fn($r) => [
                     'type'        => 'report',
                     'label'       => ucfirst($r->report_type) . ' Report – ' . $r->title,
                     'due'         => $r->due_date,
-                    'days'        => $days,
+                    'days'        => Days::until($r->due_date),
                     'award_title' => $r->award->title,
                 ])->values()->all());
-                $totalSent++;
             }
         }
+    }
 
-        // ── Compliance Calendar ──────────────────────────────────────────────
+    private function remindCompliance(Notifier $notifier, bool $dryRun): void
+    {
         foreach (self::REPORT_WINDOWS as $days) {
-            $flag  = "reminder_sent_{$days}";
-            [$start, $end] = $this->window($days);
+            $flag = "reminder_sent_{$days}";
 
             $items = ComplianceCalendar::with('award.proposal.leadPi')
-                ->where('status', 'upcoming')
-                ->whereBetween('due_date', [$start, $end])
+                ->whereIn('status', ['upcoming', 'overdue'])
+                ->whereDate('due_date', '>=', now()->toDateString())
+                ->whereDate('due_date', '<=', now()->addDays($days)->toDateString())
                 ->where($flag, false)
                 ->get();
 
-            foreach ($items->groupBy(fn($i) => optional($i->award->proposal->leadPi)->id) as $piId => $group) {
-                if (!$piId) continue;
+            foreach ($items->groupBy(fn($i) => $i->award?->proposal?->leadPi?->id) as $piId => $group) {
+                if (! $piId) {
+                    continue;
+                }
+
                 $pi = $group->first()->award->proposal->leadPi;
+
                 $reminders = $group->map(fn($i) => [
                     'type'        => 'compliance',
                     'label'       => $i->title . ' (' . $i->deliverable_type . ')',
                     'due'         => $i->due_date,
-                    'days'        => $days,
+                    'days'        => Days::until($i->due_date),
                     'award_title' => $i->award->title,
                 ])->values()->all();
 
-                Mail::to($pi->email)->send(new DeadlineReminderMail($pi->name, $reminders, $days));
-                $group->each->update([$flag => true]);
-                $totalSent++;
+                if ($dryRun) {
+                    $this->line("  would remind {$pi->name} about {$group->count()} deliverable(s) [{$days}-day window]");
+                    continue;
+                }
+
+                $this->mail($pi, $reminders, $days);
+
+                foreach ($group as $item) {
+                    $this->notifications += $notifier->complianceDue($item, Days::until($item->due_date));
+                    $item->update([$flag => true]);
+                }
             }
         }
+    }
 
-        // ── Ethics Renewals ──────────────────────────────────────────────────
+    private function remindEthics(Notifier $notifier, bool $dryRun): void
+    {
         foreach (self::ETHICS_WINDOWS as $days) {
-            $flag  = "reminder_sent_{$days}";
-            [$start, $end] = $this->window($days);
+            $flag = "reminder_sent_{$days}";
 
             $items = EthicsRenewal::with('award.proposal.leadPi')
-                ->whereBetween('expiry_date', [$start, $end])
+                ->whereDate('expiry_date', '>=', now()->toDateString())
+                ->whereDate('expiry_date', '<=', now()->addDays($days)->toDateString())
                 ->whereNotIn('renewal_status', ['renewed', 'expired'])
                 ->where($flag, false)
                 ->get();
 
-            foreach ($items->groupBy(fn($i) => optional($i->award->proposal->leadPi)->id) as $piId => $group) {
-                if (!$piId) continue;
+            foreach ($items->groupBy(fn($i) => $i->award?->proposal?->leadPi?->id) as $piId => $group) {
+                if (! $piId) {
+                    continue;
+                }
+
                 $pi = $group->first()->award->proposal->leadPi;
+
                 $reminders = $group->map(fn($i) => [
                     'type'        => 'ethics',
                     'label'       => 'Protocol ' . $i->ethics_number,
                     'due'         => $i->expiry_date,
-                    'days'        => $days,
+                    'days'        => Days::until($i->expiry_date),
                     'award_title' => $i->award->title,
                 ])->values()->all();
 
-                Mail::to($pi->email)->send(new DeadlineReminderMail($pi->name, $reminders, $days));
-                $group->each->update([$flag => true]);
-                $totalSent++;
+                if ($dryRun) {
+                    $this->line("  would remind {$pi->name} about {$group->count()} protocol(s) [{$days}-day window]");
+                    continue;
+                }
+
+                $this->mail($pi, $reminders, $days);
+
+                foreach ($group as $item) {
+                    $this->notifications += $notifier->ethicsExpiring($item, Days::until($item->expiry_date));
+                    $item->update([$flag => true]);
+                }
             }
         }
-
-        $this->info("Deadline reminders dispatched: {$totalSent} email(s) sent.");
-        return Command::SUCCESS;
     }
 
-    private function window(int $days): array
+    /**
+     * One recipient's failure must not stop the rest of the run.
+     */
+    private function mail(User $recipient, array $reminders, int $days): void
     {
-        return [
-            now()->addDays($days)->startOfDay(),
-            now()->addDays($days)->endOfDay(),
-        ];
+        try {
+            Mail::to($recipient->email)->send(new DeadlineReminderMail($recipient->name, $reminders, $days));
+            $this->emails++;
+        } catch (\Throwable $e) {
+            $this->failures++;
+            $this->warn("  mail to {$recipient->email} failed: {$e->getMessage()}");
+            Log::error('Deadline reminder mail failed', [
+                'recipient' => $recipient->email,
+                'window'    => $days,
+                'error'     => $e->getMessage(),
+            ]);
+        }
     }
 
-    private function notifyStaff(int $days, array $reminders): void
+    private function notifyOffice(int $days, array $reminders): void
     {
         $staff = User::whereHas('role', fn($q) => $q->whereIn('name', ['coordinator', 'planning_officer']))
             ->where('is_active', true)
             ->get();
 
         foreach ($staff as $user) {
-            Mail::to($user->email)->send(new DeadlineReminderMail($user->name, $reminders, $days));
+            $this->mail($user, $reminders, $days);
         }
     }
 }

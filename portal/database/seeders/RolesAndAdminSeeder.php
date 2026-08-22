@@ -28,6 +28,8 @@ class RolesAndAdminSeeder extends Seeder
             ['name' => 'research_scientist', 'display_name' => 'Research Scientist',         'description' => 'Conducts technical reviews of proposals'],
             ['name' => 'pi',                 'display_name' => 'Principal Investigator',     'description' => 'Lead researcher on grant proposals and awards'],
             ['name' => 'secretary',          'display_name' => 'Secretary / Admin',          'description' => 'Administrative support and document management'],
+            ['name' => 'drcp',                'display_name' => 'Director, Research Coordination & Promotion', 'description' => 'Institutional clearance of proposals before the Director General'],
+            ['name' => 'dg',                  'display_name' => 'Director General',           'description' => 'Final institutional approval and Letter of Support'],
         ];
 
         foreach ($roles as $role) {

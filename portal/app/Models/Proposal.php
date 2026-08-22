@@ -30,6 +30,7 @@ class Proposal extends Model
         'submitted_at' => 'date',
         'outcome_date' => 'date',
         'requested_budget' => 'decimal:2',
+        'base_requested_budget' => 'decimal:2',
     ];
 
     public function fundingCall() { return $this->belongsTo(FundingCall::class); }
@@ -39,6 +40,36 @@ class Proposal extends Model
     public function reviews() { return $this->hasMany(ProposalReview::class); }
     public function documents() { return $this->hasMany(ProposalDocument::class); }
     public function award() { return $this->hasOne(Award::class); }
+    public function approvals() { return $this->hasMany(ProposalApproval::class); }
+
+    /** Has this level signed off? (finding M9) */
+    public function hasApprovalAt(string $level): bool
+    {
+        return $this->approvals
+            ->where('level', $level)
+            ->where('status', 'approved')
+            ->isNotEmpty();
+    }
+
+    /** Fully cleared institutionally and ready to go to the donor. */
+    public function isClearedForSubmission(): bool
+    {
+        return $this->hasApprovalAt('drcp') && $this->hasApprovalAt('dg');
+    }
+
+    /** Which sign-off the proposal is waiting on, if any. */
+    public function awaitingApprovalAt(): ?string
+    {
+        if (! $this->isReviewComplete()) {
+            return null;
+        }
+
+        if (! $this->hasApprovalAt('drcp')) {
+            return 'drcp';
+        }
+
+        return $this->hasApprovalAt('dg') ? null : 'dg';
+    }
 
     /**
      * Statuses that mean the donor has ruled on the proposal.
