@@ -173,7 +173,7 @@
 @endsection
 
 @section('js')
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script src="{{ asset('vendor/chartjs/chart.umd.js') }}"></script>
 <script>
 const palette = ['#003366','#0077b6','#00b4d8','#90e0ef','#48cae4','#023e8a','#0096c7','#ade8f4'];
 const danger  = '#e74c3c', warning = '#f39c12', success = '#27ae60', info = '#3498db';

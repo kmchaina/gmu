@@ -47,8 +47,10 @@ return [
     |
     */
 
+    // Finding M17: the portal must work on a network that cannot reach the
+    // public internet. Without this, every page waits on fonts.googleapis.com.
     'google_fonts' => [
-        'allowed' => true,
+        'allowed' => false,
     ],
 
     /*
@@ -462,8 +464,10 @@ return [
     */
 
     'plugins' => [
+        // Finding M17: not used by any view, and it pulled two files from a CDN
+        // on every page load.
         'Datatables' => [
-            'active' => true,
+            'active' => false,
             'files' => [
                 [
                     'type' => 'js',
@@ -482,18 +486,21 @@ return [
                 ],
             ],
         ],
+        // Used by the searchable dropdowns on the call, proposal and award
+        // forms. Served from the application rather than a CDN so the portal
+        // works on a network that cannot reach the public internet.
         'Select2' => [
             'active' => true,
             'files' => [
                 [
                     'type' => 'js',
-                    'asset' => false,
-                    'location' => '//cdnjs.cloudflare.com/ajax/libs/select2/4.0.3/js/select2.min.js',
+                    'asset' => true,
+                    'location' => 'vendor/select2/js/select2.min.js',
                 ],
                 [
                     'type' => 'css',
-                    'asset' => false,
-                    'location' => '//cdnjs.cloudflare.com/ajax/libs/select2/4.0.3/css/select2.css',
+                    'asset' => true,
+                    'location' => 'vendor/select2/css/select2.min.css',
                 ],
             ],
         ],
@@ -507,8 +514,9 @@ return [
                 ],
             ],
         ],
+        // Not referenced by any view.
         'Sweetalert2' => [
-            'active' => true,
+            'active' => false,
             'files' => [
                 [
                     'type' => 'js',

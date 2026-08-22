@@ -63,9 +63,11 @@
     </div>
 
     <nav class="sidebar-menu">
-        {{-- Finding M18: Analytics, the AI hub, the proposal library, researcher
-             profiles and the audit log were all built but unreachable from the
-             navigation. Every module a role may use now has a link. --}}
+        {{-- NOTE: this layout serves only the profile page, which uses the
+             Breeze (Tailwind) partials. Every other screen extends
+             adminlte::page and takes its navigation from config/adminlte.php.
+             The two menus mirror each other — change both, or better, finish
+             consolidating onto one layout. --}}
         @php $u = auth()->user(); @endphp
 
         <div class="menu-section">Main</div>
