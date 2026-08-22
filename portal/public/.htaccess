@@ -1,3 +1,9 @@
+# Re-grant web access: this directory is the only one that may be served.
+# The parent portal/.htaccess denies everything above it.
+<IfModule mod_authz_core.c>
+    Require all granted
+</IfModule>
+
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes

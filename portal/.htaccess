@@ -1,0 +1,20 @@
+# ---------------------------------------------------------------------------
+# Deny all direct web access to the application directory.
+#
+# Only portal/public may be served — it re-grants access in its own .htaccess.
+# This keeps .env, composer.json, storage/logs, database/ and the rest of the
+# source out of reach while the app is installed inside the XAMPP document
+# root. The permanent fix is an Apache VirtualHost whose DocumentRoot is
+# portal/public; see DEPLOYMENT.md.
+# ---------------------------------------------------------------------------
+
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
+
+Options -Indexes
