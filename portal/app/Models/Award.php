@@ -40,6 +40,15 @@ class Award extends Model
     public function reports() { return $this->hasMany(Report::class); }
     public function monitoringVisits() { return $this->hasMany(MonitoringVisit::class); }
     public function ethicsRenewals() { return $this->hasMany(EthicsRenewal::class); }
+    public function subAwards() { return $this->hasMany(SubAward::class); }
+    public function expenditures() { return $this->hasMany(Expenditure::class); }
+    public function closeout() { return $this->hasOne(AwardCloseout::class); }
+
+    /** Money passed through to partners, in the reporting currency. */
+    public function subAwardedTotal(): float
+    {
+        return (float) $this->subAwards()->whereIn('status', ['active', 'completed'])->sum('base_amount');
+    }
 
     /**
      * Load everything the traffic light needs in one query per aggregate.

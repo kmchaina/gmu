@@ -7,6 +7,8 @@ use App\Models\FundingCall;
 use App\Models\Proposal;
 use App\Models\Report;
 use App\Models\Donor;
+use App\Models\SubAward;
+use App\Services\AuditReadinessScore;
 use App\Models\EthicsRenewal;
 use App\Models\ComplianceCalendar;
 use App\Support\Money;
@@ -33,6 +35,12 @@ class AnalyticsController extends Controller
             'compliance_overdue'    => ComplianceCalendar::where('status', 'upcoming')->where('due_date', '<', now())->count(),
             'ethics_expiring_soon'  => EthicsRenewal::where('expiry_date', '<=', now()->addDays(60))
                                         ->whereNotIn('renewal_status', ['renewed', 'expired'])->count(),
+            // Slide 12 of the concept: an annual audit-readiness score.
+            'audit_readiness'       => app(AuditReadinessScore::class)->portfolioAverage(),
+            'sub_award_exposure'    => SubAward::whereIn('status', ['active', 'completed'])->sum('base_amount'),
+            'open_sub_awards'       => SubAward::whereIn('status', ['draft', 'active', 'suspended'])->count(),
+            'awaiting_closeout'     => Award::whereDate('end_date', '<', now())
+                                        ->where('status', '!=', 'completed')->count(),
         ];
 
         // ── Awards by Status (pie) ───────────────────────────────────────────

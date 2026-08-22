@@ -20,6 +20,13 @@
         ['label'=>'Compliance Overdue', 'value'=> $kpis['compliance_overdue'],'icon'=>'fas fa-calendar-times','color'=>'danger'],
         ['label'=>'Ethics Expiring',    'value'=> $kpis['ethics_expiring_soon'],'icon'=>'fas fa-shield-alt', 'color'=>'warning'],
         ['label'=>'Total Proposals',    'value'=> $kpis['proposals_total'],    'icon'=>'fas fa-file-alt',     'color'=>'secondary'],
+        // Slide 12 of the GMU concept: audit readiness and sub-award exposure.
+        ['label'=>'Audit Readiness',    'value'=> $kpis['audit_readiness'].'/100', 'icon'=>'fas fa-clipboard-check',
+         'color'=> $kpis['audit_readiness'] >= 85 ? 'success' : ($kpis['audit_readiness'] >= 65 ? 'info' : ($kpis['audit_readiness'] >= 45 ? 'warning' : 'danger'))],
+        ['label'=>'Sub-award Exposure', 'value'=> $kpis['base_currency'].' '.number_format($kpis['sub_award_exposure']), 'icon'=>'fas fa-handshake', 'color'=>'info'],
+        ['label'=>'Open Sub-awards',    'value'=> $kpis['open_sub_awards'],    'icon'=>'fas fa-people-carry', 'color'=>'secondary'],
+        ['label'=>'Awaiting Closeout',  'value'=> $kpis['awaiting_closeout'],  'icon'=>'fas fa-flag-checkered',
+         'color'=> $kpis['awaiting_closeout'] > 0 ? 'warning' : 'success'],
     ];
     @endphp
 

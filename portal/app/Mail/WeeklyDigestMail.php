@@ -16,7 +16,10 @@ class WeeklyDigestMail extends Mailable
         public string $recipientName,
         public array  $stats,       // overall counts: active_awards, open_calls, overdue_reports, proposals_pending_review
         public array  $upcoming,    // next 14-day items: [ ['type','label','award_title','due','days'] ]
-        public array  $overdueItems // overdue items: [ ['type','label','award_title','overdue_days'] ]
+        public array  $overdueItems, // overdue items: [ ['type','label','award_title','overdue_days'] ]
+        // The week's movement — new calls, calls closing, new awards, submissions
+        // and awards awaiting closeout (slide 15 of the GMU concept).
+        public array  $thisWeek = []
     ) {}
 
     public function envelope(): Envelope

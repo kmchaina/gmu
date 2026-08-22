@@ -67,6 +67,77 @@
       </div>
     </div>
 
+    {{-- The week's movement — slide 15 of the GMU concept --}}
+    @if(count($thisWeek ?? []))
+      @if(count($thisWeek['new_calls'] ?? []))
+        <div class="section-title">New Calls This Week</div>
+        <table>
+          <thead><tr><th>Call</th><th>Donor</th><th>Deadline</th></tr></thead>
+          <tbody>
+          @foreach($thisWeek['new_calls'] as $call)
+            <tr>
+              <td>{{ $call['title'] }}</td>
+              <td>{{ $call['donor'] }}</td>
+              <td>{{ $call['due']?->format('d M Y') }} ({{ $call['days'] }} days)</td>
+            </tr>
+          @endforeach
+          </tbody>
+        </table>
+      @endif
+
+      @if(count($thisWeek['closing_soon'] ?? []))
+        <div class="section-title">Calls Closing Within 30 Days</div>
+        <table>
+          <thead><tr><th>Call</th><th>Donor</th><th>Closes</th></tr></thead>
+          <tbody>
+          @foreach($thisWeek['closing_soon'] as $call)
+            <tr>
+              <td>{{ $call['title'] }}</td>
+              <td>{{ $call['donor'] }}</td>
+              <td>{{ $call['due']?->format('d M Y') }} ({{ $call['days'] }} days)</td>
+            </tr>
+          @endforeach
+          </tbody>
+        </table>
+      @endif
+
+      @if(count($thisWeek['submissions'] ?? []))
+        <div class="section-title">Proposals Submitted This Week</div>
+        <table>
+          <thead><tr><th>Proposal</th><th>Lead PI</th><th>Donor</th></tr></thead>
+          <tbody>
+          @foreach($thisWeek['submissions'] as $submission)
+            <tr><td>{{ $submission['title'] }}</td><td>{{ $submission['pi'] }}</td><td>{{ $submission['donor'] }}</td></tr>
+          @endforeach
+          </tbody>
+        </table>
+      @endif
+
+      @if(count($thisWeek['new_awards'] ?? []))
+        <div class="section-title">New Awards This Week</div>
+        <table>
+          <thead><tr><th>Award</th><th>Donor</th><th>Value</th></tr></thead>
+          <tbody>
+          @foreach($thisWeek['new_awards'] as $award)
+            <tr><td>{{ $award['title'] }}</td><td>{{ $award['donor'] }}</td><td>{{ $award['amount'] }}</td></tr>
+          @endforeach
+          </tbody>
+        </table>
+      @endif
+
+      @if(count($thisWeek['awaiting_closeout'] ?? []))
+        <div class="section-title">Awards Awaiting Closeout</div>
+        <table>
+          <thead><tr><th>Award</th><th>Ended</th><th>Days since</th></tr></thead>
+          <tbody>
+          @foreach($thisWeek['awaiting_closeout'] as $award)
+            <tr><td>{{ $award['title'] }}</td><td>{{ $award['ended']?->format('d M Y') }}</td><td>{{ $award['days'] }}</td></tr>
+          @endforeach
+          </tbody>
+        </table>
+      @endif
+    @endif
+
     {{-- Overdue items --}}
     <div class="section-title">Overdue Items</div>
     @if(count($overdueItems))

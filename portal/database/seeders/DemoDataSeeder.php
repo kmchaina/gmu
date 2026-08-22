@@ -3,6 +3,9 @@
 namespace Database\Seeders;
 
 use App\Models\Award;
+use App\Models\AwardCloseout;
+use App\Models\Expenditure;
+use App\Models\SubAward;
 use App\Models\CallInterest;
 use App\Models\Donor;
 use App\Models\FundingCall;
@@ -15,6 +18,7 @@ use App\Models\ResearcherProfile;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\ComplianceScheduleGenerator;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -46,6 +50,9 @@ class DemoDataSeeder extends Seeder
         $this->interests($calls, $people);
         $proposals = $this->proposals($calls, $people);
         $this->awards($proposals, $people);
+        $this->subAwards($people);
+        $this->ledger($people);
+        $this->closedOutAward($proposals, $people);
         $this->library($people);
 
         $this->command?->newLine();
@@ -400,6 +407,211 @@ class DemoDataSeeder extends Seeder
 
         $next->get(0)?->update(['due_date' => now()->subDays(11)->toDateString()]);
         $next->get(1)?->update(['due_date' => now()->addDays(9)->toDateString()]);
+    }
+
+    /**
+     * Pass-through funding to partner institutions — the sector weakness the
+     * benchmarking exercise identified, now visible.
+     */
+    private function subAwards(array $people): void
+    {
+        $rows = [
+            ['NIH-1R01-2024-0917', 'Kilimanjaro Clinical Research Institute', 'institution', 145000, 'active',    true,  true],
+            ['NIH-1R01-2024-0917', 'Ifakara Health Institute',               'institution', 98000,  'active',    true,  false],
+            ['EDCTP-RIA-2024-118', "Kibong'oto Infectious Diseases Hospital", 'institution', 86000,  'active',    false, false],
+            ['EDCTP-RIA-2024-118', 'Amref Health Africa',                     'ngo',         42000,  'completed', true,  true],
+        ];
+
+        foreach ($rows as [$contract, $partner, $type, $amount, $status, $dueDiligence, $monitored]) {
+            $award = Award::where('contract_number', $contract)->first();
+
+            if (! $award) {
+                continue;
+            }
+
+            SubAward::firstOrCreate(
+                ['award_id' => $award->id, 'partner_name' => $partner],
+                [
+                    'partner_type'               => $type,
+                    'country'                    => 'Tanzania',
+                    'contact_person'             => 'Grants Office',
+                    'contact_email'              => 'grants@partner.ac.tz',
+                    'agreement_number'           => $award->contract_number . '/SUB/' . random_int(10, 99),
+                    'amount'                     => $amount,
+                    'currency'                   => $award->currency,
+                    'disbursed_amount'           => round($amount * ($status === 'completed' ? 1 : 0.45), 2),
+                    'start_date'                 => $award->start_date,
+                    'end_date'                   => $award->end_date,
+                    'status'                     => $status,
+                    'reporting_frequency'        => 'quarterly',
+                    'next_report_due'            => now()->addDays(21),
+                    'due_diligence_completed_on' => $dueDiligence ? $award->start_date : null,
+                    'last_monitored_on'          => $monitored ? now()->subMonths(4) : null,
+                    'scope_of_work'              => 'Site-level data collection, laboratory processing and community engagement.',
+                ]
+            );
+        }
+    }
+
+    /**
+     * Transactions behind the budget lines, so spend is traceable and the
+     * audit-readiness score has something real to measure.
+     */
+    private function ledger(array $people): void
+    {
+        $descriptions = [
+            'personnel'   => ['Field team salaries', 'Research assistant stipends', 'Data clerk wages'],
+            'equipment'   => ['Laboratory consumables', 'Cold chain maintenance', 'Field tablets'],
+            'travel'      => ['Field visit — Kigoma', 'Field visit — Kagera', 'Dissemination workshop travel'],
+            'consumables' => ['Reagents and test kits', 'Sample collection supplies'],
+            'indirect'    => ['Institutional overhead recovery'],
+        ];
+
+        foreach (Award::whereIn('contract_number', ['NIH-1R01-2024-0917', 'EDCTP-RIA-2024-118'])->get() as $award) {
+            foreach ($award->budgets as $line) {
+                if (Expenditure::where('award_budget_id', $line->id)->exists()) {
+                    continue;
+                }
+
+                $labels    = $descriptions[$line->category] ?? ['General expenditure'];
+                $remaining = (float) $line->spent_amount;
+                $entries   = min(count($labels), 3);
+
+                for ($i = 0; $i < $entries; $i++) {
+                    $isLast = $i === $entries - 1;
+                    $amount = $isLast ? round($remaining, 2) : round($remaining / ($entries - $i) * 0.9, 2);
+                    $remaining -= $amount;
+
+                    if ($amount <= 0) {
+                        continue;
+                    }
+
+                    Expenditure::create([
+                        'award_id'         => $award->id,
+                        'award_budget_id'  => $line->id,
+                        'recorded_by'      => $people['finance']->id,
+                        'transaction_date' => now()->subMonths(($i + 1) * 2),
+                        'description'      => $labels[$i],
+                        // One entry deliberately has no voucher reference, so the
+                        // readiness score has something honest to flag.
+                        'reference'        => ($line->category === 'travel' && $i === 0) ? null : 'PV-' . random_int(10000, 99999),
+                        'amount'           => $amount,
+                        'currency'         => $line->currency,
+                    ]);
+                }
+            }
+        }
+    }
+
+    /**
+     * A finished grant with its closeout done, so the eighth process can be
+     * seen working rather than described.
+     */
+    private function closedOutAward(array $proposals, array $people): void
+    {
+        $proposal = $proposals['systems_dec'] ?? null;
+
+        if (! $proposal) {
+            return;
+        }
+
+        // Reuse the declined proposal's call for an older, completed award.
+        $award = Award::firstOrCreate(['contract_number' => 'GFATM-TZA-2021-402'], [
+            'proposal_id'         => $proposal->id,
+            'donor_id'            => $proposal->fundingCall->donor_id,
+            'title'               => 'District health information systems strengthening (phase 1)',
+            'start_date'          => now()->subMonths(40)->startOfMonth(),
+            'end_date'            => now()->subMonths(4)->endOfMonth(),
+            'total_budget'        => 620000,
+            'currency'            => 'USD',
+            'status'              => 'completed',
+            'reporting_frequency' => 'semi_annual',
+            'schedule_generated'  => true,
+            'notes'               => 'Closed out and archived; retained as the worked example of workflow D.',
+        ]);
+
+        // A grant that was run properly: contract on file, budget reconciled to a
+        // ledger, ethics closed with the committee, monitoring on record. This
+        // is what a strong audit-readiness score is supposed to look like.
+        $contractPath = 'award-contracts/demo-gfatm-402-contract.pdf';
+
+        if (! Storage::disk('local')->exists($contractPath)) {
+            Storage::disk('local')->put(
+                $contractPath,
+                "%PDF-1.4\n% Demonstration contract placeholder for the GMU portfolio.\n"
+            );
+        }
+
+        $award->forceFill(['signed_contract' => $contractPath])->save();
+
+        $categories = [['personnel', 300000, 297200], ['equipment', 120000, 118600],
+                       ['travel', 90000, 88450], ['indirect', 110000, 107200]];
+
+        foreach ($categories as [$category, $allocated, $spent]) {
+            $line = $award->budgets()->firstOrCreate(['category' => $category], [
+                'allocated_amount' => $allocated,
+                'spent_amount'     => $spent,
+                'currency'         => $award->currency,
+            ]);
+
+            if (! Expenditure::where('award_budget_id', $line->id)->exists()) {
+                Expenditure::create([
+                    'award_id'         => $award->id,
+                    'award_budget_id'  => $line->id,
+                    'recorded_by'      => $people['finance']->id,
+                    'transaction_date' => now()->subMonths(6),
+                    'description'      => ucfirst($category) . ' — consolidated to closeout',
+                    'reference'        => 'PV-' . random_int(10000, 99999),
+                    'amount'           => $spent,
+                    'currency'         => $award->currency,
+                ]);
+            }
+        }
+
+        $award->ethicsRenewals()->firstOrCreate(
+            ['ethics_number' => 'NIMR/HQ/R.8a/Vol.VIII/2874'],
+            [
+                'issuing_body'   => 'NIMR Medical Research Coordinating Committee',
+                'approval_date'  => now()->subMonths(40),
+                'expiry_date'    => now()->subMonths(3),
+                'renewal_status' => 'renewed',
+            ]
+        );
+
+        foreach ([28, 14] as $monthsAgo) {
+            $award->monitoringVisits()->firstOrCreate(
+                ['visit_date' => now()->subMonths($monthsAgo)->toDateString()],
+                [
+                    'conducted_by'    => $people['planning']->id,
+                    'location'        => 'District health offices and the project finance unit',
+                    'findings'        => 'Data collection followed the approved protocol and expenditure reconciled to the ledger without exception.',
+                    'recommendations' => 'Maintain the monthly reconciliation routine through to closeout.',
+                ]
+            );
+        }
+
+        AwardCloseout::firstOrCreate(['award_id' => $award->id], [
+            'status'                    => 'completed',
+            'final_technical_report_at' => now()->subMonths(3),
+            'final_financial_report_at' => now()->subMonths(3),
+            'financial_reconciled_at'   => now()->subMonths(2),
+            'obligations_completed_at'  => now()->subMonths(2),
+            'sub_awards_closed_at'      => now()->subMonths(2),
+            'assets_transferred_at'     => now()->subMonths(2),
+            'ethics_closed_at'          => now()->subMonths(2),
+            'archived_at'               => now()->subMonth(),
+            'archive_reference'         => 'GMU/ARCHIVE/2026/GFATM-402',
+            'total_expenditure'         => 611450.00,
+            'unspent_balance'           => 8550.00,
+            'funds_returned'            => 8550.00,
+            'funds_returned_on'         => now()->subMonth(),
+            'what_went_well'            => 'District teams were trained before the software rollout, so uptake was immediate and data quality held through the whole period.',
+            'what_was_difficult'        => 'Procurement of server hardware took seven months against a planned two, which pushed the second phase of rollout into the final year.',
+            'recommendations'           => 'Start procurement at contract signature rather than after the inception workshop, and budget for a contingency on any imported equipment.',
+            'donor_feedback'            => 'The donor rated reporting timeliness as strong and asked for the lessons on procurement to be shared across the portfolio.',
+            'completed_by'              => $people['coordinator']->id,
+            'completed_at'              => now()->subMonth(),
+        ]);
     }
 
     private function library(array $people): void

@@ -7,6 +7,7 @@ use App\Models\Donor;
 use App\Models\Proposal;
 use App\Support\UploadRules;
 use App\Support\GrantFiles;
+use App\Services\AuditReadinessScore;
 use App\Services\ComplianceScheduleGenerator;
 use App\Services\Notifier;
 use Illuminate\Http\Request;
@@ -117,9 +118,15 @@ class AwardsController extends Controller
     {
         $this->authorize('view', $award);
 
-        $award->load('proposal.leadPi', 'donor', 'budgets', 'reports', 'complianceCalendar', 'monitoringVisits', 'ethicsRenewals');
+        $award->load([
+            'proposal.leadPi', 'donor', 'budgets', 'reports', 'complianceCalendar',
+            'monitoringVisits', 'ethicsRenewals', 'subAwards', 'closeout',
+            'expenditures.budgetLine', 'expenditures.recordedBy',
+        ]);
 
-        return view('awards.show', compact('award'));
+        $readiness = app(AuditReadinessScore::class)->for($award);
+
+        return view('awards.show', compact('award', 'readiness'));
     }
 
     public function edit(Award $award)

@@ -640,6 +640,73 @@
     </div>
 
     {{-- Quick Stats --}}
+    {{-- Audit readiness — slide 12 of the GMU concept --}}
+    <div class="card card-outline card-primary">
+        <div class="card-header"><h3 class="card-title"><i class="fas fa-clipboard-check mr-1"></i>Audit Readiness</h3></div>
+        <div class="card-body">
+            @php
+                $band = $readiness['band'];
+                $bandColour = match($band) {
+                    'ready' => 'success',
+                    'minor gaps' => 'info',
+                    'significant gaps' => 'warning',
+                    default => 'danger',
+                };
+            @endphp
+            <div class="d-flex align-items-baseline justify-content-between mb-2">
+                <span class="display-4 text-{{ $bandColour }}">{{ $readiness['score'] }}</span>
+                <span class="badge badge-{{ $bandColour }}">{{ ucfirst($band) }}</span>
+            </div>
+            <div class="progress mb-3" style="height:6px">
+                <div class="progress-bar bg-{{ $bandColour }}" style="width: {{ $readiness['score'] }}%"></div>
+            </div>
+
+            @foreach($readiness['dimensions'] as $dimension)
+                <div class="d-flex justify-content-between small">
+                    <span class="text-muted">{{ $dimension['label'] }}</span>
+                    <span>{{ $dimension['earned'] }} / {{ $dimension['weight'] }}</span>
+                </div>
+            @endforeach
+
+            @if(count($readiness['gaps']) > 0)
+                <hr class="my-2">
+                <p class="small text-muted mb-1">What an auditor would ask about:</p>
+                <ul class="small pl-3 mb-0">
+                    @foreach($readiness['gaps'] as $gap)
+                        <li>{{ $gap }}</li>
+                    @endforeach
+                </ul>
+            @endif
+        </div>
+    </div>
+
+    {{-- Closeout — GM-BPF workflow D --}}
+    <div class="card card-outline card-success">
+        <div class="card-header"><h3 class="card-title"><i class="fas fa-flag-checkered mr-1"></i>Closeout</h3></div>
+        <div class="card-body">
+            @php $closeout = $award->closeout; @endphp
+            @if($closeout && $closeout->status === 'completed')
+                <p class="small mb-2"><span class="badge badge-success">Closed out</span>
+                    {{ $closeout->completed_at?->format('j M Y') }}</p>
+            @elseif($closeout && $closeout->progress() > 0)
+                <div class="progress mb-2" style="height:6px">
+                    <div class="progress-bar bg-success" style="width: {{ $closeout->progress() }}%"></div>
+                </div>
+                <p class="small text-muted mb-2">{{ $closeout->progress() }}% complete,
+                    {{ count($closeout->outstandingSteps()) }} step(s) outstanding.</p>
+            @elseif(\App\Support\Days::until($award->end_date) <= 60)
+                <p class="small text-muted mb-2">
+                    The award ends {{ \App\Support\Days::describe($award->end_date) }}. Closeout should begin now.
+                </p>
+            @else
+                <p class="small text-muted mb-2">Not yet started — the award is still running.</p>
+            @endif
+            <a href="{{ route('awards.closeout', $award) }}" class="btn btn-sm btn-outline-success btn-block">
+                Open closeout checklist
+            </a>
+        </div>
+    </div>
+
     <div class="card">
         <div class="card-header"><h3 class="card-title">Quick Stats</h3></div>
         <div class="card-body p-0">
@@ -673,6 +740,236 @@
                     <strong>{{ $award->ethicsRenewals->count() }}</strong>
                 </li>
             </ul>
+        </div>
+    </div>
+
+    {{-- Sub-awards — slide 12, and the sector weakness the benchmarking found --}}
+    <div class="card card-outline card-info">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="card-title"><i class="fas fa-handshake mr-1"></i>Sub-awards ({{ $award->subAwards->count() }})</h3>
+            @can('manageSubAwards', $award)
+            <button class="btn btn-xs btn-info" data-toggle="collapse" data-target="#addSubAward">
+                <i class="fas fa-plus mr-1"></i>Add
+            </button>
+            @endcan
+        </div>
+
+        @can('manageSubAwards', $award)
+        <div class="collapse" id="addSubAward">
+            <div class="card-body bg-light border-bottom">
+                <form method="POST" action="{{ route('awards.sub-awards.store', $award) }}" enctype="multipart/form-data">
+                    @csrf
+                    <div class="form-row">
+                        <div class="form-group col-md-5">
+                            <label class="small text-uppercase text-muted">Partner institution</label>
+                            <input type="text" name="partner_name" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label class="small text-uppercase text-muted">Type</label>
+                            <select name="partner_type" class="form-control form-control-sm">
+                                @foreach(\App\Models\SubAward::PARTNER_TYPES as $value => $label)
+                                    <option value="{{ $value }}">{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="form-group col-md-2">
+                            <label class="small text-uppercase text-muted">Country</label>
+                            <input type="text" name="country" class="form-control form-control-sm">
+                        </div>
+                        <div class="form-group col-md-2">
+                            <label class="small text-uppercase text-muted">Amount ({{ $award->currency }})</label>
+                            <input type="number" step="0.01" min="0" name="amount" class="form-control form-control-sm" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-3">
+                            <label class="small text-uppercase text-muted">Start</label>
+                            <input type="date" name="start_date" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label class="small text-uppercase text-muted">End</label>
+                            <input type="date" name="end_date" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="form-group col-md-2">
+                            <label class="small text-uppercase text-muted">Status</label>
+                            <select name="status" class="form-control form-control-sm">
+                                <option value="draft">Draft</option>
+                                <option value="active">Active</option>
+                                <option value="completed">Completed</option>
+                                <option value="suspended">Suspended</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-2">
+                            <label class="small text-uppercase text-muted">Reporting</label>
+                            <select name="reporting_frequency" class="form-control form-control-sm">
+                                <option value="quarterly">Quarterly</option>
+                                <option value="monthly">Monthly</option>
+                                <option value="semi_annual">Every 6 months</option>
+                                <option value="annual">Annually</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-2">
+                            <label class="small text-uppercase text-muted">Due diligence</label>
+                            <input type="date" name="due_diligence_completed_on" class="form-control form-control-sm">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-8">
+                            <label class="small text-uppercase text-muted">Signed agreement</label>
+                            <input type="file" name="agreement_file" class="form-control-file form-control-sm">
+                        </div>
+                        <div class="form-group col-md-4 d-flex align-items-end">
+                            <button class="btn btn-sm btn-info btn-block">Record sub-award</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        @endcan
+
+        <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+                <thead class="thead-light">
+                    <tr><th></th><th>Partner</th><th>Amount</th><th>Disbursed</th><th>Period</th><th>Status</th><th>Due diligence</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @forelse($award->subAwards as $sub)
+                    <tr>
+                        <td><span class="traffic-dot traffic-{{ $sub->health() }}" title="Sub-award health"></span></td>
+                        <td>
+                            <strong>{{ $sub->partner_name }}</strong>
+                            <br><small class="text-muted">{{ \App\Models\SubAward::PARTNER_TYPES[$sub->partner_type] ?? $sub->partner_type }}@if($sub->country) · {{ $sub->country }}@endif</small>
+                        </td>
+                        <td>{{ $sub->currency }} {{ number_format($sub->amount, 0) }}</td>
+                        <td>{{ number_format($sub->disbursedPercentage(), 0) }}%</td>
+                        <td><small>{{ $sub->start_date?->format('M Y') }} → {{ $sub->end_date?->format('M Y') }}</small></td>
+                        <td><span class="badge badge-{{ $sub->status === 'active' ? 'success' : 'secondary' }}">{{ ucfirst($sub->status) }}</span></td>
+                        <td>
+                            @if($sub->due_diligence_completed_on)
+                                <small class="text-success">{{ $sub->due_diligence_completed_on->format('M Y') }}</small>
+                            @else
+                                <small class="text-danger">Not done</small>
+                            @endif
+                        </td>
+                        <td class="text-right">
+                            @if($sub->agreement_file)
+                                <a href="{{ route('awards.sub-awards.agreement', [$award, $sub]) }}" class="btn btn-xs btn-outline-secondary" title="Signed agreement">
+                                    <i class="fas fa-file-contract"></i>
+                                </a>
+                            @endif
+                            @can('manageSubAwards', $award)
+                            <form method="POST" action="{{ route('awards.sub-awards.destroy', [$award, $sub]) }}" class="d-inline"
+                                  onsubmit="return confirm('Remove this sub-award?');">
+                                @csrf @method('DELETE')
+                                <button class="btn btn-xs btn-outline-danger"><i class="fas fa-trash"></i></button>
+                            </form>
+                            @endcan
+                        </td>
+                    </tr>
+                    @empty
+                    <tr><td colspan="8" class="text-center text-muted py-3">
+                        No sub-awards recorded. Money passed to a partner institution belongs here — NIMR stays accountable to the donor for it.
+                    </td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {{-- Expenditure ledger --}}
+    <div class="card card-outline card-warning">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="card-title"><i class="fas fa-receipt mr-1"></i>Expenditure Ledger ({{ $award->expenditures->count() }})</h3>
+            @can('manageBudget', $award)
+            <button class="btn btn-xs btn-warning" data-toggle="collapse" data-target="#addExpenditure">
+                <i class="fas fa-plus mr-1"></i>Record
+            </button>
+            @endcan
+        </div>
+
+        @can('manageBudget', $award)
+        <div class="collapse" id="addExpenditure">
+            <div class="card-body bg-light border-bottom">
+                <form method="POST" action="{{ route('awards.expenditures.store', $award) }}">
+                    @csrf
+                    <div class="form-row">
+                        <div class="form-group col-md-3">
+                            <label class="small text-uppercase text-muted">Date</label>
+                            <input type="date" name="transaction_date" class="form-control form-control-sm" required
+                                   max="{{ now()->toDateString() }}">
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label class="small text-uppercase text-muted">Budget line</label>
+                            <select name="award_budget_id" class="form-control form-control-sm">
+                                <option value="">Unassigned</option>
+                                @foreach($award->budgets as $line)
+                                    <option value="{{ $line->id }}">{{ ucfirst($line->category) }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label class="small text-uppercase text-muted">Description</label>
+                            <input type="text" name="description" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="form-group col-md-2">
+                            <label class="small text-uppercase text-muted">Amount</label>
+                            <input type="number" step="0.01" min="0.01" name="amount" class="form-control form-control-sm" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label class="small text-uppercase text-muted">Voucher / invoice reference</label>
+                            <input type="text" name="reference" class="form-control form-control-sm"
+                                   placeholder="Traceable to the finance record">
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label class="small text-uppercase text-muted">Notes</label>
+                            <input type="text" name="notes" class="form-control form-control-sm">
+                        </div>
+                        <div class="form-group col-md-2 d-flex align-items-end">
+                            <button class="btn btn-sm btn-warning btn-block">Post</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        @endcan
+
+        <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+                <thead class="thead-light">
+                    <tr><th>Date</th><th>Description</th><th>Budget line</th><th>Reference</th><th class="text-right">Amount</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @forelse($award->expenditures->sortByDesc('transaction_date')->take(15) as $entry)
+                    <tr>
+                        <td><small>{{ $entry->transaction_date?->format('j M Y') }}</small></td>
+                        <td>{{ $entry->description }}
+                            @if($entry->recordedBy)<br><small class="text-muted">by {{ $entry->recordedBy->name }}</small>@endif
+                        </td>
+                        <td><small>{{ $entry->budgetLine ? ucfirst($entry->budgetLine->category) : '—' }}</small></td>
+                        <td><small class="{{ $entry->reference ? '' : 'text-danger' }}">{{ $entry->reference ?: 'none' }}</small></td>
+                        <td class="text-right">{{ $entry->currency }} {{ number_format($entry->amount, 2) }}</td>
+                        <td class="text-right">
+                            @can('manageBudget', $award)
+                            <form method="POST" action="{{ route('awards.expenditures.destroy', [$award, $entry]) }}"
+                                  onsubmit="return confirm('Remove this entry?');">
+                                @csrf @method('DELETE')
+                                <button class="btn btn-xs btn-outline-danger"><i class="fas fa-times"></i></button>
+                            </form>
+                            @endcan
+                        </td>
+                    </tr>
+                    @empty
+                    <tr><td colspan="6" class="text-center text-muted py-3">
+                        No transactions recorded. Budget lines show what was spent; this is what an auditor follows it back to.
+                    </td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+            @if($award->expenditures->count() > 15)
+                <div class="card-footer text-muted small">Showing the 15 most recent of {{ $award->expenditures->count() }} entries.</div>
+            @endif
         </div>
     </div>
 

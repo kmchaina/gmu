@@ -65,6 +65,21 @@ class AwardPolicy
         return $user->hasAnyRole(['coordinator', 'planning_officer', 'research_scientist']);
     }
 
+    /**
+     * Closeout is the Coordinator's process, with Finance on the reconciliation
+     * (GM-BPF workflow D).
+     */
+    public function manageCloseout(User $user, Award $award): bool
+    {
+        return $user->hasAnyRole(['coordinator', 'finance_officer', 'planning_officer']);
+    }
+
+    /** Sub-award agreements are contractual: Coordinator and Legal. */
+    public function manageSubAwards(User $user, Award $award): bool
+    {
+        return $user->hasAnyRole(['coordinator', 'legal_officer', 'finance_officer']);
+    }
+
     private function isAwardTeam(User $user, Award $award): bool
     {
         $proposal = $award->proposal;

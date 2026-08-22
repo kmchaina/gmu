@@ -10,6 +10,9 @@ use App\Http\Controllers\ProposalTeamController;
 use App\Http\Controllers\ProposalsController;
 use App\Http\Controllers\AwardsController;
 use App\Http\Controllers\AwardBudgetsController;
+use App\Http\Controllers\AwardCloseoutController;
+use App\Http\Controllers\ExpendituresController;
+use App\Http\Controllers\SubAwardsController;
 use App\Http\Controllers\ComplianceCalendarController;
 use App\Http\Controllers\MonitoringVisitsController;
 use App\Http\Controllers\EthicsRenewalsController;
@@ -56,6 +59,11 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('awards', AwardsController::class);
     Route::get('awards/{award}/contract',     [AwardsController::class, 'downloadContract'])->name('awards.contract');
 
+    // Closeout & lessons learned — GM-BPF workflow D
+    Route::get('awards/{award}/closeout',          [AwardCloseoutController::class, 'show'])->name('awards.closeout');
+    Route::patch('awards/{award}/closeout',        [AwardCloseoutController::class, 'update'])->name('awards.closeout.update');
+    Route::post('awards/{award}/closeout/complete',[AwardCloseoutController::class, 'complete'])->name('awards.closeout.complete');
+
     // Award sub-resources. scopeBindings() makes Laravel resolve each child
     // through its parent award, so a budget line belonging to another award
     // cannot be reached through this one (finding H5).
@@ -74,6 +82,16 @@ Route::middleware(['auth'])->group(function () {
         Route::post('awards/{award}/ethics',               [EthicsRenewalsController::class, 'store'])->name('awards.ethics.store');
         Route::patch('awards/{award}/ethics/{renewal}',    [EthicsRenewalsController::class, 'update'])->name('awards.ethics.update');
         Route::get('awards/{award}/ethics/{renewal}/certificate', [EthicsRenewalsController::class, 'downloadCertificate'])->name('awards.ethics.certificate');
+
+        // Sub-awards to partner institutions
+        Route::post('awards/{award}/sub-awards',                        [SubAwardsController::class, 'store'])->name('awards.sub-awards.store');
+        Route::patch('awards/{award}/sub-awards/{subAward}',            [SubAwardsController::class, 'update'])->name('awards.sub-awards.update');
+        Route::get('awards/{award}/sub-awards/{subAward}/agreement',    [SubAwardsController::class, 'downloadAgreement'])->name('awards.sub-awards.agreement');
+        Route::delete('awards/{award}/sub-awards/{subAward}',           [SubAwardsController::class, 'destroy'])->name('awards.sub-awards.destroy');
+
+        // Expenditure ledger
+        Route::post('awards/{award}/expenditures',                      [ExpendituresController::class, 'store'])->name('awards.expenditures.store');
+        Route::delete('awards/{award}/expenditures/{expenditure}',      [ExpendituresController::class, 'destroy'])->name('awards.expenditures.destroy');
         Route::delete('awards/{award}/ethics/{renewal}',   [EthicsRenewalsController::class, 'destroy'])->name('awards.ethics.destroy');
     });
 

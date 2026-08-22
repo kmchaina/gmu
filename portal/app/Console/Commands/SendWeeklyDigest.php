@@ -24,6 +24,7 @@ class SendWeeklyDigest extends Command
         $stats    = $this->buildStats();
         $upcoming = $this->buildUpcoming();
         $overdue  = $this->buildOverdue();
+        $thisWeek = $this->buildThisWeek();
 
         $recipients = User::whereHas('role', fn($q) => $q->whereIn('name', ['coordinator', 'planning_officer']))
             ->where('is_active', true)
@@ -35,9 +36,17 @@ class SendWeeklyDigest extends Command
         }
 
         foreach ($recipients as $user) {
-            Mail::to($user->email)->send(
-                new WeeklyDigestMail($user->name, $stats, $upcoming, $overdue)
-            );
+            try {
+                Mail::to($user->email)->send(
+                    new WeeklyDigestMail($user->name, $stats, $upcoming, $overdue, $thisWeek)
+                );
+            } catch (\Throwable $e) {
+                $this->warn("  digest to {$user->email} failed: {$e->getMessage()}");
+                \Illuminate\Support\Facades\Log::error('Weekly digest failed', [
+                    'recipient' => $user->email,
+                    'error'     => $e->getMessage(),
+                ]);
+            }
         }
 
         $this->info("Weekly digest sent to {$recipients->count()} recipient(s).");
@@ -53,6 +62,71 @@ class SendWeeklyDigest extends Command
             'overdue_reports'          => Report::where('status', 'pending')
                                             ->where('due_date', '<', now())
                                             ->count(),
+        ];
+    }
+
+    /**
+     * What moved in the last seven days.
+     *
+     * Slide 15 of the GMU concept asks the digest to summarise new calls
+     * received, calls closing soon, and new awards and submissions. The digest
+     * previously carried deadlines and overdue items only.
+     */
+    private function buildThisWeek(): array
+    {
+        $since = now()->subWeek();
+
+        return [
+            'new_calls' => FundingCall::with('donor')
+                ->where('created_at', '>=', $since)
+                ->orderBy('deadline')
+                ->get()
+                ->map(fn($call) => [
+                    'title' => $call->title,
+                    'donor' => $call->donor?->acronym ?? $call->donor?->name,
+                    'due'   => $call->deadline,
+                    'days'  => Days::until($call->deadline),
+                ])->all(),
+
+            'closing_soon' => FundingCall::with('donor')
+                ->where('status', 'open')
+                ->whereBetween('deadline', [now(), now()->addDays(30)])
+                ->orderBy('deadline')
+                ->get()
+                ->map(fn($call) => [
+                    'title' => $call->title,
+                    'donor' => $call->donor?->acronym ?? $call->donor?->name,
+                    'due'   => $call->deadline,
+                    'days'  => Days::until($call->deadline),
+                ])->all(),
+
+            'new_awards' => Award::with('donor')
+                ->where('created_at', '>=', $since)
+                ->get()
+                ->map(fn($award) => [
+                    'title'  => $award->title,
+                    'donor'  => $award->donor?->acronym ?? $award->donor?->name,
+                    'amount' => $award->currency . ' ' . number_format((float) $award->total_budget, 0),
+                ])->all(),
+
+            'submissions' => Proposal::with('fundingCall.donor', 'leadPi')
+                ->whereNotNull('submitted_at')
+                ->where('submitted_at', '>=', $since)
+                ->get()
+                ->map(fn($proposal) => [
+                    'title' => $proposal->title,
+                    'pi'    => $proposal->leadPi?->name,
+                    'donor' => $proposal->fundingCall?->donor?->acronym,
+                ])->all(),
+
+            'awaiting_closeout' => Award::whereDate('end_date', '<', now())
+                ->where('status', '!=', 'completed')
+                ->get()
+                ->map(fn($award) => [
+                    'title' => $award->title,
+                    'ended' => $award->end_date,
+                    'days'  => Days::overdueBy($award->end_date),
+                ])->all(),
         ];
     }
 
