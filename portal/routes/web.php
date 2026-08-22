@@ -10,6 +10,7 @@ use App\Http\Controllers\ProposalTeamController;
 use App\Http\Controllers\ProposalsController;
 use App\Http\Controllers\AwardsController;
 use App\Http\Controllers\AwardBudgetsController;
+use App\Http\Controllers\AwardAmendmentsController;
 use App\Http\Controllers\AwardCloseoutController;
 use App\Http\Controllers\ExpendituresController;
 use App\Http\Controllers\SubAwardsController;
@@ -88,6 +89,12 @@ Route::middleware(['auth'])->group(function () {
         Route::patch('awards/{award}/sub-awards/{subAward}',            [SubAwardsController::class, 'update'])->name('awards.sub-awards.update');
         Route::get('awards/{award}/sub-awards/{subAward}/agreement',    [SubAwardsController::class, 'downloadAgreement'])->name('awards.sub-awards.agreement');
         Route::delete('awards/{award}/sub-awards/{subAward}',           [SubAwardsController::class, 'destroy'])->name('awards.sub-awards.destroy');
+
+        // Amendments and no-cost extensions
+        Route::post('awards/{award}/amendments',                       [AwardAmendmentsController::class, 'store'])->name('awards.amendments.store');
+        Route::patch('awards/{award}/amendments/{amendment}',          [AwardAmendmentsController::class, 'update'])->name('awards.amendments.update');
+        Route::get('awards/{award}/amendments/{amendment}/approval',   [AwardAmendmentsController::class, 'downloadApproval'])->name('awards.amendments.approval');
+        Route::delete('awards/{award}/amendments/{amendment}',         [AwardAmendmentsController::class, 'destroy'])->name('awards.amendments.destroy');
 
         // Expenditure ledger
         Route::post('awards/{award}/expenditures',                      [ExpendituresController::class, 'store'])->name('awards.expenditures.store');

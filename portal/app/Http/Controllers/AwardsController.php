@@ -121,7 +121,7 @@ class AwardsController extends Controller
         $award->load([
             'proposal.leadPi', 'donor', 'budgets', 'reports', 'complianceCalendar',
             'monitoringVisits', 'ethicsRenewals', 'subAwards', 'closeout',
-            'expenditures.budgetLine', 'expenditures.recordedBy',
+            'expenditures.budgetLine', 'expenditures.recordedBy', 'amendments.recordedBy',
         ]);
 
         $readiness = app(AuditReadinessScore::class)->for($award);

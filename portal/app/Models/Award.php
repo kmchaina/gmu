@@ -43,6 +43,7 @@ class Award extends Model
     public function subAwards() { return $this->hasMany(SubAward::class); }
     public function expenditures() { return $this->hasMany(Expenditure::class); }
     public function closeout() { return $this->hasOne(AwardCloseout::class); }
+    public function amendments() { return $this->hasMany(AwardAmendment::class)->latest(); }
 
     /** Money passed through to partners, in the reporting currency. */
     public function subAwardedTotal(): float

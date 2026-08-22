@@ -70,7 +70,7 @@ class DocumentsController extends Controller
             'mime_type'   => $file->getMimeType(),
             'version'     => $data['version'],
             'is_public'   => $request->boolean('is_public'),
-        ]);
+        ] + $this->retention($data['category'], $request->input('retention_years')));
 
         return redirect()->route('documents.index')
             ->with('success', 'Document uploaded successfully.');
@@ -116,10 +116,24 @@ class DocumentsController extends Controller
             'description' => $data['description'] ?? null,
             'version'     => $data['version'],
             'is_public'   => $request->boolean('is_public'),
-        ]);
+        ] + $this->retention($data['category'], $request->input('retention_years')));
 
         return redirect()->route('documents.index')
             ->with('success', 'Document updated.');
+    }
+
+    /**
+     * How long this document has to be kept, and why (retention policy).
+     */
+    private function retention(string $category, $years): array
+    {
+        $years = (int) ($years ?: (Document::RETENTION_YEARS[$category] ?? 5));
+
+        return [
+            'retention_years' => $years,
+            'retain_until'    => now()->addYears($years)->toDateString(),
+            'retention_basis' => 'Default retention for ' . $category . ' records',
+        ];
     }
 
     public function destroy(Document $document)

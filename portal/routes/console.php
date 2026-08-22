@@ -27,3 +27,11 @@ Schedule::command('gmu:mark-overdue')
     ->dailyAt('06:45')
     ->timezone('Africa/Dar_es_Salaam')
     ->appendOutputTo(storage_path('logs/compliance-overdue.log'));
+
+// Configuration and data health. Runs before the reminder job so a silent
+// misconfiguration (mail set to "log", debug left on) is visible in the log
+// rather than discovered when a deadline is missed (finding H8).
+Schedule::command('gmu:health')
+    ->dailyAt('06:30')
+    ->timezone('Africa/Dar_es_Salaam')
+    ->appendOutputTo(storage_path('logs/health.log'));

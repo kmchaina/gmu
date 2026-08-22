@@ -113,10 +113,18 @@ class ReportsController extends Controller
             'status'      => 'required|in:pending,submitted,under_review,approved,rejected',
             'file_path'   => UploadRules::office(UploadRules::MAX_LARGE),
             'gmu_comments'=> 'nullable|string',
+            'sent_to_donor_on'      => 'nullable|date',
+            'donor_acknowledgement' => 'nullable|string|max:255',
         ]);
 
         if ($request->hasFile('file_path')) {
             $data['file_path'] = GrantFiles::replace($request->file('file_path'), 'reports', $report->file_path);
+        }
+
+        // Forwarding a report to the donor is a separate act from approving it
+        // internally, and the date is what the donor relationship turns on.
+        if (! empty($data['sent_to_donor_on']) && ! $report->sent_to_donor_on) {
+            $data['sent_by'] = auth()->id();
         }
 
         if (in_array($data['status'], ['submitted', 'under_review', 'approved']) && !$report->submitted_date) {

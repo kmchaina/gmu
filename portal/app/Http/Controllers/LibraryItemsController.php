@@ -24,10 +24,24 @@ class LibraryItemsController extends Controller
 
         if ($request->filled('search')) {
             $term = $request->search;
-            $query->where(function ($q) use ($term) {
-                $q->where('title', 'like', "%{$term}%")
-                  ->orWhere('content', 'like', "%{$term}%");
-            });
+
+            // The migration builds a FULLTEXT index on title and content; it was
+            // never used, so every search was a table scan with LIKE. SQLite has
+            // no equivalent, so the test suite keeps the LIKE path.
+            $supportsFullText = in_array(
+                LibraryItem::query()->getConnection()->getDriverName(),
+                ['mysql', 'mariadb'],
+                true
+            );
+
+            if ($supportsFullText && strlen($term) >= 3) {
+                $query->whereFullText(['title', 'content'], $term);
+            } else {
+                $query->where(function ($q) use ($term) {
+                    $q->where('title', 'like', "%{$term}%")
+                      ->orWhere('content', 'like', "%{$term}%");
+                });
+            }
         }
 
         $items      = $query->paginate(20)->withQueryString();

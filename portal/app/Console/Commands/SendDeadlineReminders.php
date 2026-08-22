@@ -8,6 +8,7 @@ use App\Models\EthicsRenewal;
 use App\Models\Report;
 use App\Models\User;
 use App\Services\Notifier;
+use App\Services\Sms\SmsGateway;
 use App\Support\Days;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -37,25 +38,34 @@ class SendDeadlineReminders extends Command
     /** Ethics renewals need a longer lead time for the regulator. */
     private const ETHICS_WINDOWS = [60, 30];
 
+    private ?SmsGateway $sms = null;
+
     private int $emails = 0;
     private int $notifications = 0;
+    private int $texts = 0;
     private int $failures = 0;
 
-    public function handle(Notifier $notifier): int
+    public function handle(Notifier $notifier, SmsGateway $sms): int
     {
-        $dryRun = (bool) $this->option('dry-run');
+        $dryRun    = (bool) $this->option('dry-run');
+        $this->sms = $sms;
 
         $this->remindReports($notifier, $dryRun);
         $this->remindCompliance($notifier, $dryRun);
         $this->remindEthics($notifier, $dryRun);
 
         $this->info(sprintf(
-            '%s%d email(s), %d in-app notification(s), %d failure(s).',
+            '%s%d email(s), %d in-app notification(s), %d text message(s), %d failure(s).',
             $dryRun ? '[dry run] ' : '',
             $this->emails,
             $this->notifications,
+            $this->texts,
             $this->failures
         ));
+
+        if (! $sms->isConfigured() && ! $dryRun) {
+            $this->comment('No SMS gateway configured — urgent reminders went by email and in-app only.');
+        }
 
         return self::SUCCESS;
     }
@@ -93,6 +103,17 @@ class SendDeadlineReminders extends Command
                 }
 
                 $this->mail($pi, $reminders, $days);
+
+                // Slide 10 of the GMU concept asks for alerts that reach a PI in
+                // the field. Seven days out, email on its own is not enough.
+                if ($days <= 7) {
+                    $this->text($pi, sprintf(
+                        'NIMR GMU: %d report(s) due within %d days, including "%s". Please submit through the portal.',
+                        $group->count(),
+                        $days,
+                        $group->first()->title
+                    ));
+                }
 
                 foreach ($group as $report) {
                     $this->notifications += $notifier->reportDue($report, Days::until($report->due_date));
@@ -212,6 +233,23 @@ class SendDeadlineReminders extends Command
                 'window'    => $days,
                 'error'     => $e->getMessage(),
             ]);
+        }
+    }
+
+    /**
+     * A short message to a PI's phone. Unavailable until a gateway is
+     * configured — the null driver logs rather than pretending to deliver.
+     */
+    private function text(User $recipient, string $message): void
+    {
+        if (blank($recipient->phone) || ! $this->sms?->isConfigured()) {
+            return;
+        }
+
+        if ($this->sms->send($recipient->phone, $message)) {
+            $this->texts++;
+        } else {
+            $this->failures++;
         }
     }
 

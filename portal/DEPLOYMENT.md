@@ -135,8 +135,9 @@ Self-registration is disabled. Accounts are created by the Coordinator at
 22 August 2026; new passwords were handed over out of band and should be
 changed at first login.
 
-The seeder still contains a hardcoded password for fresh installs — moving it
-to an environment variable is a Phase 1 task (audit finding H4).
+The seeder reads `GMU_ADMIN_PASSWORD`, or generates one and prints it once.
+Any account whose password was set by the Coordinator is held at the profile
+page until the user chooses their own (audit finding H4, closed).
 
 ---
 
@@ -150,13 +151,101 @@ schtasks /Create /TN "NIMR-GMU-Scheduler" /SC MINUTE /MO 1 ^
   /TR "C:\xampp\php\php.exe C:\xampp\htdocs\GMU\portal\artisan schedule:run" /F
 ```
 
-Note that `MAIL_MAILER` is currently `log`, so no mail leaves the machine.
-Set real SMTP credentials and send one test digest before relying on reminders
-(audit finding H8).
+`MAIL_MAILER` is currently `log`, so no mail leaves the machine. To change that:
+
+1. Copy the mail settings from `.env.production.example` into `.env` and fill in
+   the SMTP host, username and password.
+2. `php artisan config:clear`
+3. `php artisan gmu:mail-test coordinator@nimr.or.tz` — check the inbox, and the
+   spam folder.
+4. `php artisan gmu:health` — the mailer line must come back green.
+
+Until that is done `gmu:health` reports it every morning, and reminders still
+reach people through in-app notifications (audit finding H8).
+
+### SMS alerts
+
+Slide 10 of the GMU concept asks for alerts that reach a PI in the field.
+`App\Services\Sms` holds an Africa's Talking driver and a null driver; the null
+driver logs rather than sending, so nothing silently claims delivery. To switch
+it on, set in `.env`:
+
+```
+GMU_SMS_GATEWAY=africastalking
+GMU_SMS_USERNAME=<account username>
+GMU_SMS_KEY=<api key>
+GMU_SMS_SENDER_ID=NIMR
+```
+
+Text messages then go out on the 7-day report window only — the point at which
+email alone has clearly not worked — to PIs with a phone number on file.
 
 ---
 
-## 6. Release checklist
+## 6. Daily checks
+
+`php artisan gmu:health` checks the things that fail silently: debug mode left
+on, a mailer that writes to a log, uploads sitting on the public disk, the app
+connecting as `root`, no active Coordinator, awards that ended without
+closeout. It runs every morning at 06:30 and writes to
+`storage/logs/health.log`; add `--strict` in a deployment step to make warnings
+fail the release.
+
+Scheduled jobs, all in `routes/console.php`:
+
+| Time (EAT) | Command | What it does |
+|---|---|---|
+| 06:30 | `gmu:health` | Configuration and data checks |
+| 06:45 | `gmu:mark-overdue` | Flags deliverables past their due date |
+| 07:00 | `gmu:send-deadline-reminders` | 30/14/7-day reports and compliance, 60/30-day ethics |
+| Mon 08:00 | `gmu:send-weekly-digest` | The week's movement to the GMU office |
+
+---
+
+## 7. Database health and the instance rebuild
+
+The 22 August repair (§2) fixed the Aria privilege tables and rebuilt the
+`nimr_gmu` schema from a verified dump, so the GMU's own tablespaces are clean.
+The InnoDB "log sequence number is in the future" warnings affect the rest of
+the instance and have not been cleared — that needs a maintenance window,
+because the same MariaDB serves `website`, `nimr_journal`, `nreims`,
+`nimr_intranet`, `ajsc_db`, `eqrs_db`, `tmsc_db` and others.
+
+### Verifying a backup restores
+
+Done for `nimr_gmu` on 22 August; repeat quarterly, and for any database before
+you rebuild it:
+
+```bash
+mysqldump -u root --single-transaction --routines --triggers --databases <db> > dump.sql
+mysql -u root -e "CREATE DATABASE <db>_verify"
+sed 's/`<db>`/`<db>_verify`/g' dump.sql | mysql -u root
+# compare table and row counts, then drop the verify database
+```
+
+### Rebuilding one database
+
+This is what cleared `nimr_gmu`. Per database, with users off the system:
+
+```bash
+mysqldump -u root --single-transaction --routines --triggers --databases <db> > <db>.sql
+# verify the dump restores (above) BEFORE the next line
+mysql -u root -e "DROP DATABASE <db>; CREATE DATABASE <db> CHARACTER SET utf8mb4"
+mysql -u root <db> < <db>.sql
+# database-level grants are dropped with the database — re-grant afterwards
+mysql -u root -e "GRANT ... ON <db>.* TO '<user>'@'localhost'; FLUSH PRIVILEGES"
+```
+
+### If the instance keeps degrading
+
+The durable fix is a clean MariaDB installation: dump every database, note the
+grants (`SHOW GRANTS` per user), reinstall, reimport, re-grant. Budget an
+evening, and take the dumps to another machine first — the current backups sit
+on the same disk as the data they protect.
+
+---
+
+## 8. Release checklist
 
 - [ ] `php artisan config:clear && php artisan route:clear && php artisan view:clear`
 - [ ] `npm run build` if front-end assets changed
@@ -164,3 +253,5 @@ Set real SMTP credentials and send one test digest before relying on reminders
 - [ ] Backup taken before migrating
 - [ ] Exposure checks in §1 re-run
 - [ ] `APP_DEBUG=false` and `APP_ENV=production` in any shared environment
+- [ ] `php artisan gmu:health --strict` passes
+- [ ] `php artisan test` passes

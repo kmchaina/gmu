@@ -92,6 +92,22 @@
                 </div>
 
                 <div class="form-group">
+                    <label>Sent to donor on</label>
+                    <input type="date" name="sent_to_donor_on" class="form-control"
+                           value="{{ old('sent_to_donor_on', $report->sent_to_donor_on?->toDateString()) }}">
+                    <small class="form-text text-muted">
+                        The date the report actually went to the donor — separate from internal approval.
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label>Donor acknowledgement</label>
+                    <input type="text" name="donor_acknowledgement" class="form-control"
+                           placeholder="Reference or confirmation from the donor"
+                           value="{{ old('donor_acknowledgement', $report->donor_acknowledgement) }}">
+                </div>
+
+                <div class="form-group">
                     <label>GMU Comments</label>
                     <textarea name="gmu_comments" rows="3" class="form-control">{{ old('gmu_comments', $report->gmu_comments) }}</textarea>
                 </div>

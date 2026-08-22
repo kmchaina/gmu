@@ -20,6 +20,16 @@ return [
         'model'   => env('ANTHROPIC_MODEL', 'claude-sonnet-5'),
     ],
 
+    // SMS alerts to PIs in the field (slide 10 of the GMU concept). Without a
+    // gateway configured the null driver logs instead of sending.
+    'sms' => [
+        'gateway'   => env('GMU_SMS_GATEWAY', 'null'),
+        'username'  => env('GMU_SMS_USERNAME'),
+        'key'       => env('GMU_SMS_KEY'),
+        'sender_id' => env('GMU_SMS_SENDER_ID', 'NIMR'),
+        'endpoint'  => env('GMU_SMS_ENDPOINT', 'https://api.africastalking.com/version1/messaging'),
+    ],
+
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),
     ],

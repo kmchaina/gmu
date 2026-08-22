@@ -743,6 +743,126 @@
         </div>
     </div>
 
+    {{-- Amendments and no-cost extensions --}}
+    <div class="card card-outline card-secondary">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="card-title"><i class="fas fa-file-signature mr-1"></i>Amendments ({{ $award->amendments->count() }})</h3>
+            @can('update', $award)
+            <button class="btn btn-xs btn-secondary" data-toggle="collapse" data-target="#addAmendment">
+                <i class="fas fa-plus mr-1"></i>Record
+            </button>
+            @endcan
+        </div>
+
+        @can('update', $award)
+        <div class="collapse" id="addAmendment">
+            <div class="card-body bg-light border-bottom">
+                <form method="POST" action="{{ route('awards.amendments.store', $award) }}" enctype="multipart/form-data">
+                    @csrf
+                    <div class="form-row">
+                        <div class="form-group col-md-3">
+                            <label class="small text-uppercase text-muted">Type</label>
+                            <select name="type" class="form-control form-control-sm">
+                                @foreach(\App\Models\AwardAmendment::TYPES as $value => $label)
+                                    <option value="{{ $value }}">{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label class="small text-uppercase text-muted">New end date</label>
+                            <input type="date" name="new_end_date" class="form-control form-control-sm">
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label class="small text-uppercase text-muted">New value ({{ $award->currency }})</label>
+                            <input type="number" step="0.01" min="0" name="new_budget" class="form-control form-control-sm">
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label class="small text-uppercase text-muted">Donor reference</label>
+                            <input type="text" name="reference" class="form-control form-control-sm">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label class="small text-uppercase text-muted">Reason</label>
+                            <input type="text" name="reason" class="form-control form-control-sm" required
+                                   placeholder="Why the change was sought">
+                        </div>
+                        <div class="form-group col-md-2">
+                            <label class="small text-uppercase text-muted">Status</label>
+                            <select name="status" class="form-control form-control-sm">
+                                <option value="draft">Draft</option>
+                                <option value="submitted">Submitted</option>
+                                <option value="approved">Approved by donor</option>
+                                <option value="rejected">Rejected</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-2">
+                            <label class="small text-uppercase text-muted">Approved on</label>
+                            <input type="date" name="donor_approved_on" class="form-control form-control-sm">
+                        </div>
+                        <div class="form-group col-md-2">
+                            <label class="small text-uppercase text-muted">Approval letter</label>
+                            <input type="file" name="approval_file" class="form-control-file form-control-sm">
+                        </div>
+                    </div>
+                    <p class="small text-muted mb-2">
+                        Recording an approved amendment applies it to the award, and an extension
+                        regenerates the reporting calendar so deadlines follow the new period.
+                    </p>
+                    <button class="btn btn-sm btn-secondary">Record amendment</button>
+                </form>
+            </div>
+        </div>
+        @endcan
+
+        <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+                <thead class="thead-light">
+                    <tr><th>Type</th><th>Reason</th><th>Effect</th><th>Status</th><th>Approved</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @forelse($award->amendments as $amendment)
+                    <tr>
+                        <td><strong>{{ $amendment->typeName() }}</strong>
+                            @if($amendment->reference)<br><small class="text-muted">{{ $amendment->reference }}</small>@endif
+                        </td>
+                        <td><small>{{ Str::limit($amendment->reason, 60) }}</small></td>
+                        <td>
+                            @php $days = $amendment->daysExtended(); $delta = $amendment->budgetDelta(); @endphp
+                            @if($days)<small>{{ $days > 0 ? '+' : '' }}{{ $days }} days</small><br>@endif
+                            @if($delta !== null && $delta != 0)
+                                <small>{{ $delta > 0 ? '+' : '' }}{{ number_format($delta, 0) }} {{ $award->currency }}</small>
+                            @endif
+                            @if(! $days && ($delta === null || $delta == 0))<small class="text-muted">—</small>@endif
+                        </td>
+                        <td><span class="badge badge-{{ $amendment->status === 'approved' ? 'success' : ($amendment->status === 'rejected' ? 'danger' : 'secondary') }}">
+                            {{ ucfirst($amendment->status) }}</span></td>
+                        <td><small>{{ $amendment->donor_approved_on?->format('j M Y') ?? '—' }}</small></td>
+                        <td class="text-right">
+                            @if($amendment->approval_file)
+                                <a href="{{ route('awards.amendments.approval', [$award, $amendment]) }}" class="btn btn-xs btn-outline-secondary">
+                                    <i class="fas fa-file"></i>
+                                </a>
+                            @endif
+                            @can('update', $award)
+                            <form method="POST" action="{{ route('awards.amendments.destroy', [$award, $amendment]) }}" class="d-inline"
+                                  onsubmit="return confirm('Remove this amendment record?');">
+                                @csrf @method('DELETE')
+                                <button class="btn btn-xs btn-outline-danger"><i class="fas fa-trash"></i></button>
+                            </form>
+                            @endcan
+                        </td>
+                    </tr>
+                    @empty
+                    <tr><td colspan="6" class="text-center text-muted py-3">
+                        No amendments. Extensions, budget revisions and scope changes belong here so the award shows its history, not just its current state.
+                    </td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     {{-- Sub-awards — slide 12, and the sector weakness the benchmarking found --}}
     <div class="card card-outline card-info">
         <div class="card-header d-flex justify-content-between align-items-center">

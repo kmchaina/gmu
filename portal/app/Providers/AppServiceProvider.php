@@ -8,6 +8,9 @@ use App\Services\AI\GmuAiService;
 use App\Services\AI\GrantMatchingEngine;
 use App\Services\AI\LlmInterface;
 use App\Services\AI\NullProvider;
+use App\Services\Sms\AfricasTalkingGateway;
+use App\Services\Sms\NullGateway;
+use App\Services\Sms\SmsGateway;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Gate;
 
@@ -22,6 +25,14 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(LlmInterface::class, function () {
             $provider = config('services.anthropic.api_key') ? ClaudeProvider::class : NullProvider::class;
             return new $provider();
+        });
+
+        // SMS gateway, bound the same way as the LLM provider: a real driver
+        // when it is configured, a logging null driver until then.
+        $this->app->bind(SmsGateway::class, function () {
+            return config('services.sms.gateway') === 'africastalking'
+                ? new AfricasTalkingGateway()
+                : new NullGateway();
         });
 
         $this->app->bind(GmuAiService::class, function ($app) {
