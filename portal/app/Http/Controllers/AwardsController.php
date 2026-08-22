@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Award;
 use App\Models\Donor;
 use App\Models\Proposal;
+use App\Support\UploadRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -70,7 +71,7 @@ class AwardsController extends Controller
             'status'          => 'required|in:active,completed,suspended,terminated',
             'kickoff_date'    => 'nullable|date',
             'notes'           => 'nullable|string',
-            'signed_contract' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
+            'signed_contract' => UploadRules::office(),
         ]);
 
         if ($request->hasFile('signed_contract')) {
@@ -111,7 +112,7 @@ class AwardsController extends Controller
             'status'          => 'required|in:active,completed,suspended,terminated',
             'kickoff_date'    => 'nullable|date',
             'notes'           => 'nullable|string',
-            'signed_contract' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
+            'signed_contract' => UploadRules::office(),
         ]);
 
         if ($request->hasFile('signed_contract')) {

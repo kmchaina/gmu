@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\FundingCall;
 use App\Models\Donor;
 use App\Models\CallInterest;
+use App\Support\UploadRules;
 use Illuminate\Http\Request;
 
 class CallsController extends Controller
@@ -58,7 +59,7 @@ class CallsController extends Controller
             'deadline'            => 'required|date|after:today',
             'initiation_type'     => 'required|in:gmu_posted,researcher_initiated',
             'status'              => 'required|in:draft,open,closed,archived',
-            'call_document'       => 'nullable|file|mimes:pdf,doc,docx|max:10240',
+            'call_document'       => UploadRules::office(),
         ]);
 
         $data['posted_by'] = auth()->id();
@@ -107,7 +108,7 @@ class CallsController extends Controller
             'deadline'            => 'required|date',
             'initiation_type'     => 'required|in:gmu_posted,researcher_initiated',
             'status'              => 'required|in:draft,open,closed,archived',
-            'call_document'       => 'nullable|file|mimes:pdf,doc,docx|max:10240',
+            'call_document'       => UploadRules::office(),
         ]);
 
         if ($request->hasFile('call_document')) {

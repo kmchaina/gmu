@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\DonorPolicy;
 use App\Models\Donor;
+use App\Support\UploadRules;
 use Illuminate\Http\Request;
 
 class DonorPoliciesController extends Controller
@@ -46,7 +47,7 @@ class DonorPoliciesController extends Controller
             'version'        => 'required|integer|min:1',
             'effective_date' => 'nullable|date',
             'notes'          => 'nullable|string',
-            'file'           => 'required|file|mimes:pdf,doc,docx,xlsx|max:20480',
+            'file'           => UploadRules::officeRequired(UploadRules::MAX_LARGE),
         ]);
 
         $file = $request->file('file');
@@ -88,7 +89,7 @@ class DonorPoliciesController extends Controller
             'version'        => 'required|integer|min:1',
             'effective_date' => 'nullable|date',
             'notes'          => 'nullable|string',
-            'file'           => 'nullable|file|mimes:pdf,doc,docx,xlsx|max:20480',
+            'file'           => UploadRules::office(UploadRules::MAX_LARGE),
         ]);
 
         if ($request->hasFile('file')) {

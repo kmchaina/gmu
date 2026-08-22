@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Document;
+use App\Support\UploadRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -44,7 +45,7 @@ class DocumentsController extends Controller
             'description' => 'nullable|string',
             'version'     => 'required|integer|min:1',
             'is_public'   => 'nullable|boolean',
-            'file'        => 'required|file|max:20480',
+            'file'        => UploadRules::repositoryRequired(),
         ]);
 
         $file = $request->file('file');

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Report;
 use App\Models\Award;
+use App\Support\UploadRules;
 use Illuminate\Http\Request;
 
 class ReportsController extends Controller
@@ -52,7 +53,7 @@ class ReportsController extends Controller
             'period_end'  => 'nullable|date|after_or_equal:period_start',
             'due_date'    => 'required|date',
             'status'      => 'required|in:pending,submitted,under_review,approved,rejected',
-            'file_path'   => 'nullable|file|mimes:pdf,doc,docx,xlsx|max:20480',
+            'file_path'   => UploadRules::office(UploadRules::MAX_LARGE),
             'gmu_comments'=> 'nullable|string',
         ]);
 
@@ -92,7 +93,7 @@ class ReportsController extends Controller
             'period_end'  => 'nullable|date|after_or_equal:period_start',
             'due_date'    => 'required|date',
             'status'      => 'required|in:pending,submitted,under_review,approved,rejected',
-            'file_path'   => 'nullable|file|mimes:pdf,doc,docx,xlsx|max:20480',
+            'file_path'   => UploadRules::office(UploadRules::MAX_LARGE),
             'gmu_comments'=> 'nullable|string',
         ]);
 

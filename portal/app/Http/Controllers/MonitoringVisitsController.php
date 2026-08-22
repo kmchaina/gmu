@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Award;
 use App\Models\MonitoringVisit;
+use App\Support\UploadRules;
 use Illuminate\Http\Request;
 
 class MonitoringVisitsController extends Controller
@@ -15,7 +16,7 @@ class MonitoringVisitsController extends Controller
             'location'        => 'nullable|string|max:255',
             'findings'        => 'required|string|min:20',
             'recommendations' => 'nullable|string',
-            'report_file'     => 'nullable|file|mimes:pdf,doc,docx|max:10240',
+            'report_file'     => UploadRules::office(),
         ]);
 
         $data = [

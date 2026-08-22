@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Award;
 use App\Models\EthicsRenewal;
+use App\Support\UploadRules;
 use Illuminate\Http\Request;
 
 class EthicsRenewalsController extends Controller
@@ -16,7 +17,7 @@ class EthicsRenewalsController extends Controller
             'approval_date'    => 'nullable|date',
             'expiry_date'      => 'required|date',
             'renewal_status'   => 'required|in:valid,renewal_due,expired,renewed',
-            'certificate_file' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
+            'certificate_file' => UploadRules::office(),
         ]);
 
         $data = $request->only(['ethics_number', 'issuing_body', 'approval_date', 'expiry_date', 'renewal_status']);
@@ -34,8 +35,11 @@ class EthicsRenewalsController extends Controller
     public function update(Request $request, Award $award, EthicsRenewal $renewal)
     {
         $request->validate([
-            'renewal_status' => 'required|in:valid,renewal_due,expired,renewed',
-            'expiry_date'    => 'required|date',
+            'renewal_status'   => 'required|in:valid,renewal_due,expired,renewed',
+            'expiry_date'      => 'required|date',
+            'issuing_body'     => 'nullable|string|max:255',
+            'approval_date'    => 'nullable|date',
+            'certificate_file' => UploadRules::office(),
         ]);
 
         $data = $request->only(['renewal_status', 'expiry_date', 'issuing_body', 'approval_date']);
