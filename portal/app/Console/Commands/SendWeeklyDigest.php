@@ -10,6 +10,7 @@ use App\Models\FundingCall;
 use App\Models\Proposal;
 use App\Models\Report;
 use App\Models\User;
+use App\Support\Days;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Mail;
 
@@ -73,7 +74,7 @@ class SendWeeklyDigest extends Command
                 'label'       => $r->report_type . ' Report',
                 'award_title' => $r->award->title,
                 'due'         => $r->due_date,
-                'days'        => (int) now()->diffInDays($r->due_date, false),
+                'days'        => Days::until($r->due_date),
             ];
         }
 
@@ -90,7 +91,7 @@ class SendWeeklyDigest extends Command
                 'label'       => $item->title . ' (' . $item->deliverable_type . ')',
                 'award_title' => $item->award->title,
                 'due'         => $item->due_date,
-                'days'        => (int) now()->diffInDays($item->due_date, false),
+                'days'        => Days::until($item->due_date),
             ];
         }
 
@@ -107,7 +108,7 @@ class SendWeeklyDigest extends Command
                 'label'       => 'Protocol ' . $item->ethics_number,
                 'award_title' => $item->award->title,
                 'due'         => $item->expiry_date,
-                'days'        => (int) now()->diffInDays($item->expiry_date, false),
+                'days'        => Days::until($item->expiry_date),
             ];
         }
 
@@ -131,7 +132,7 @@ class SendWeeklyDigest extends Command
                 'type'        => 'report',
                 'label'       => $r->report_type . ' Report',
                 'award_title' => $r->award->title,
-                'overdue_days' => (int) $r->due_date->diffInDays(now()),
+                'overdue_days' => Days::overdueBy($r->due_date),
             ];
         }
 
@@ -147,7 +148,7 @@ class SendWeeklyDigest extends Command
                 'type'        => 'compliance',
                 'label'       => $item->title,
                 'award_title' => $item->award->title,
-                'overdue_days' => (int) $item->due_date->diffInDays(now()),
+                'overdue_days' => Days::overdueBy($item->due_date),
             ];
         }
 
@@ -163,7 +164,7 @@ class SendWeeklyDigest extends Command
                 'type'        => 'ethics',
                 'label'       => 'Protocol ' . $item->ethics_number,
                 'award_title' => $item->award->title,
-                'overdue_days' => (int) $item->expiry_date->diffInDays(now()),
+                'overdue_days' => Days::overdueBy($item->expiry_date),
             ];
         }
 

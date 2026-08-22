@@ -26,6 +26,7 @@ class DashboardController extends Controller
             ->get();
 
         $activeAwards = \App\Models\Award::with(['proposal.leadPi', 'donor'])
+            ->withHealth()
             ->where('status', 'active')
             ->limit(6)
             ->get();
@@ -39,7 +40,11 @@ class DashboardController extends Controller
 
         if ($user->isPI()) {
             $recentCalls = \App\Models\FundingCall::with('donor')->where('status', 'open')->orderBy('deadline')->limit(5)->get();
-            $activeAwards = \App\Models\Award::with(['proposal.leadPi', 'donor'])->whereHas('proposal', fn($q) => $q->where('lead_pi_id', $user->id))->where('status', 'active')->get();
+            $activeAwards = \App\Models\Award::with(['proposal.leadPi', 'donor'])
+                ->withHealth()
+                ->whereHas('proposal', fn($q) => $q->where('lead_pi_id', $user->id))
+                ->where('status', 'active')
+                ->get();
         }
 
         return view('dashboard.index', compact('stats', 'recentCalls', 'activeAwards', 'upcomingDeadlines'));

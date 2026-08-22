@@ -145,7 +145,7 @@
                         </thead>
                         <tbody>
                             @foreach($upcomingDeadlines as $item)
-                            @php $daysLeft = now()->diffInDays($item->due_date, false); @endphp
+                            @php $daysLeft = \App\Support\Days::until($item->due_date); @endphp
                             <tr>
                                 <td>{{ Str::limit($item->title, 30) }}<br>
                                     <small class="text-muted">{{ ucfirst(str_replace('_',' ',$item->deliverable_type)) }}</small>

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Days;
 use Illuminate\Database\Eloquent\Model;
 
 class EthicsRenewal extends Model
@@ -21,8 +22,14 @@ class EthicsRenewal extends Model
 
     public function award() { return $this->belongsTo(Award::class); }
 
+    /** Inside the 60-day renewal window, or already expired. */
     public function isExpiringSoon(): bool
     {
-        return $this->expiry_date->diffInDays(now(), false) >= -60;
+        return Days::until($this->expiry_date) <= 60;
+    }
+
+    public function daysUntilExpiry(): int
+    {
+        return Days::until($this->expiry_date);
     }
 }

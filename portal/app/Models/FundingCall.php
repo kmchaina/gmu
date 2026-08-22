@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Support\Days;
 use App\Traits\LogsActivity;
+use App\Models\Concerns\ConvertsToBaseCurrency;
 use Illuminate\Database\Eloquent\Model;
 
 class FundingCall extends Model
 {
-    use \Illuminate\Database\Eloquent\SoftDeletes, LogsActivity;
+    use \Illuminate\Database\Eloquent\SoftDeletes, LogsActivity, ConvertsToBaseCurrency;
 
     public function auditLabel(): string
     {
@@ -18,7 +20,11 @@ class FundingCall extends Model
         'title', 'donor_id', 'posted_by', 'description', 'theme', 'eligibility',
         'solicitation_number', 'estimated_budget', 'currency', 'open_date', 'deadline',
         'initiation_type', 'status', 'call_document',
+        'exchange_rate', 'base_estimated_budget',
     ];
+
+    /** Indicative budget => reporting-currency equivalent (finding M3). */
+    protected array $baseCurrencyMap = ['estimated_budget' => 'base_estimated_budget'];
 
     protected $casts = [
         'deadline' => 'date',
@@ -33,7 +39,7 @@ class FundingCall extends Model
 
     public function getDaysUntilDeadlineAttribute(): int
     {
-        return now()->diffInDays($this->deadline, false);
+        return Days::until($this->deadline);
     }
 
     public function isClosingSoon(): bool

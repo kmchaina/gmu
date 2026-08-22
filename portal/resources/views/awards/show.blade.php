@@ -446,7 +446,7 @@
                 </thead>
                 <tbody>
                     @foreach($award->ethicsRenewals->sortBy('expiry_date') as $renewal)
-                    @php $expiring = $renewal->expiry_date->diffInDays(now(), false) >= -60 && $renewal->renewal_status === 'valid'; @endphp
+                    @php $expiring = \App\Support\Days::until($renewal->expiry_date) <= 60 && $renewal->renewal_status === 'valid'; @endphp
                     <tr class="{{ $renewal->renewal_status === 'expired' ? 'table-danger' : ($expiring ? 'table-warning' : '') }}">
                         <td><strong>{{ $renewal->ethics_number }}</strong></td>
                         <td>{{ $renewal->issuing_body ?? '-' }}</td>
@@ -615,7 +615,7 @@
                 $upcomingItems  = $award->complianceCalendar->where('status','upcoming')
                     ->filter(fn($c) => $c->due_date->lte(now()->addDays(14)))->count();
                 $expiringEthics = $award->ethicsRenewals->filter(fn($e) =>
-                    $e->expiry_date->diffInDays(now(), false) >= -60 && $e->renewal_status === 'valid'
+                    \App\Support\Days::until($e->expiry_date) <= 60 && $e->renewal_status === 'valid'
                 )->count();
             @endphp
             <ul class="list-unstyled text-left mt-3 small">
@@ -689,7 +689,7 @@
             </p>
             @endif
             <p class="small text-muted mb-0"><i class="fas fa-clock mr-1"></i>
-                Days remaining: <strong>{{ max(0, now()->diffInDays($award->end_date, false)) }}</strong>
+                Days remaining: <strong>{{ max(0, \App\Support\Days::until($award->end_date)) }}</strong>
             </p>
         </div>
     </div>

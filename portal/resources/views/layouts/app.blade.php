@@ -4,8 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>@yield('title', 'NIMR GMU') - Grants Management Unit</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    {{-- Finding M17: the views are written in Bootstrap 4 / AdminLTE markup, but
+         no Bootstrap stylesheet was ever linked, so cards, buttons, badges and
+         the grid rendered unstyled. These assets ship with the project and are
+         served locally — no CDN, so the portal works on an offline network.
+         Tailwind loads first; AdminLTE follows so its element styles win over
+         Tailwind's preflight on the GMU screens. --}}
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <link rel="stylesheet" href="{{ asset('vendor/fontawesome-free/css/all.min.css') }}">
+    <link rel="stylesheet" href="{{ asset('vendor/adminlte/dist/css/adminlte.min.css') }}">
     <style>
         * { box-sizing: border-box; }
         body { font-family: 'Inter', -apple-system, sans-serif; background: #f4f6f9; margin: 0; }
@@ -56,12 +63,24 @@
     </div>
 
     <nav class="sidebar-menu">
+        {{-- Finding M18: Analytics, the AI hub, the proposal library, researcher
+             profiles and the audit log were all built but unreachable from the
+             navigation. Every module a role may use now has a link. --}}
+        @php $u = auth()->user(); @endphp
+
         <div class="menu-section">Main</div>
         <div class="menu-item">
             <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}">
                 <i class="fas fa-th-large"></i> Dashboard
             </a>
         </div>
+        @can('view-analytics')
+        <div class="menu-item">
+            <a href="{{ route('analytics') }}" class="{{ request()->routeIs('analytics') ? 'active' : '' }}">
+                <i class="fas fa-chart-line"></i> Analytics
+            </a>
+        </div>
+        @endcan
 
         <div class="menu-section">Grant Opportunities</div>
         <div class="menu-item">
@@ -69,7 +88,7 @@
                 <i class="fas fa-bullhorn"></i> Funding Calls
             </a>
         </div>
-        @if(auth()->user()->hasAnyRole(['coordinator','planning_officer']))
+        @if($u->hasAnyRole(['coordinator','planning_officer']))
         <div class="menu-item">
             <a href="{{ route('donors.index') }}" class="{{ request()->routeIs('donors.*') ? 'active' : '' }}">
                 <i class="fas fa-handshake"></i> Donors
@@ -83,8 +102,18 @@
                 <i class="fas fa-file-alt"></i> Proposal Pipeline
             </a>
         </div>
+        <div class="menu-item">
+            <a href="{{ route('library.index') }}" class="{{ request()->routeIs('library.*') ? 'active' : '' }}">
+                <i class="fas fa-copy"></i> Proposal Library
+            </a>
+        </div>
+        <div class="menu-item">
+            <a href="{{ route('researchers.index') }}" class="{{ request()->routeIs('researchers.*') ? 'active' : '' }}">
+                <i class="fas fa-user-graduate"></i> {{ $u->isGmuStaff() ? 'Researchers' : 'My Profile' }}
+            </a>
+        </div>
 
-        <div class="menu-section">Awards & Compliance</div>
+        <div class="menu-section">Awards &amp; Compliance</div>
         <div class="menu-item">
             <a href="{{ route('awards.index') }}" class="{{ request()->routeIs('awards.*') ? 'active' : '' }}">
                 <i class="fas fa-trophy"></i> Active Awards
@@ -108,16 +137,43 @@
             </a>
         </div>
 
-        @if(auth()->user()->isCoordinator())
+        @can('view-analytics')
+        <div class="menu-section">Intelligence</div>
+        <div class="menu-item">
+            <a href="{{ route('ai.hub') }}" class="{{ request()->routeIs('ai.*') ? 'active' : '' }}">
+                <i class="fas fa-lightbulb"></i> AI Assistant
+            </a>
+        </div>
+        @endcan
+
+        @if($u->isCoordinator())
         <div class="menu-section">Administration</div>
         <div class="menu-item">
             <a href="{{ route('admin.users.index') }}" class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
                 <i class="fas fa-users-cog"></i> User Management
             </a>
         </div>
+        <div class="menu-item">
+            <a href="{{ route('admin.activity-log.index') }}" class="{{ request()->routeIs('admin.activity-log.*') ? 'active' : '' }}">
+                <i class="fas fa-history"></i> Audit Log
+            </a>
+        </div>
         @endif
 
         <div class="menu-section">Account</div>
+        <div class="menu-item">
+            <a href="{{ route('notifications.index') }}" class="{{ request()->routeIs('notifications.*') ? 'active' : '' }}">
+                <i class="fas fa-bell"></i> Notifications
+                @if($u->unreadNotificationsCount() > 0)
+                    <span class="badge badge-danger ml-1">{{ $u->unreadNotificationsCount() }}</span>
+                @endif
+            </a>
+        </div>
+        <div class="menu-item">
+            <a href="{{ route('profile.edit') }}" class="{{ request()->routeIs('profile.*') ? 'active' : '' }}">
+                <i class="fas fa-user-cog"></i> My Account
+            </a>
+        </div>
         <div class="menu-item">
             <form method="POST" action="{{ route('logout') }}" class="logout-btn">
                 @csrf
@@ -161,6 +217,11 @@
         @yield('content')
     </div>
 </div>
+
+<script src="{{ asset('vendor/jquery/jquery.min.js') }}"></script>
+<script src="{{ asset('vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+<script src="{{ asset('vendor/adminlte/dist/js/adminlte.min.js') }}"></script>
+@stack('scripts')
 
 </body>
 </html>

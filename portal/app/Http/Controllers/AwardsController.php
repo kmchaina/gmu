@@ -18,7 +18,7 @@ class AwardsController extends Controller
         $this->authorize('viewAny', Award::class);
 
         $user  = auth()->user();
-        $query = Award::with('proposal.leadPi', 'donor')->withCount('reports');
+        $query = Award::with('proposal.leadPi', 'donor')->withCount('reports')->withHealth();
 
         // Researchers see the grants they are on; GMU officers see the portfolio.
         if (! $user->isGmuStaff()) {

@@ -3,11 +3,12 @@
 namespace App\Models;
 
 use App\Traits\LogsActivity;
+use App\Models\Concerns\ConvertsToBaseCurrency;
 use Illuminate\Database\Eloquent\Model;
 
 class Proposal extends Model
 {
-    use \Illuminate\Database\Eloquent\SoftDeletes, LogsActivity;
+    use \Illuminate\Database\Eloquent\SoftDeletes, LogsActivity, ConvertsToBaseCurrency;
 
     public function auditLabel(): string
     {
@@ -18,7 +19,11 @@ class Proposal extends Model
         'funding_call_id', 'lead_pi_id', 'assigned_officer_id', 'title', 'abstract',
         'initiation_type', 'status', 'target_submission_date', 'submitted_at',
         'outcome_date', 'outcome_notes', 'requested_budget', 'currency',
+        'exchange_rate', 'base_requested_budget',
     ];
+
+    /** Requested amount => reporting-currency equivalent (finding M3). */
+    protected array $baseCurrencyMap = ['requested_budget' => 'base_requested_budget'];
 
     protected $casts = [
         'target_submission_date' => 'date',
@@ -34,6 +39,33 @@ class Proposal extends Model
     public function reviews() { return $this->hasMany(ProposalReview::class); }
     public function documents() { return $this->hasMany(ProposalDocument::class); }
     public function award() { return $this->hasOne(Award::class); }
+
+    /**
+     * Statuses that mean the donor has ruled on the proposal.
+     *
+     * Finding M1: the success rate was computed from the internal "approved"
+     * status, which only means cleared for submission. A funded proposal moves
+     * to "awarded", so every success was excluded from both sides of the ratio.
+     */
+    public const DECIDED_STATUSES = ['awarded', 'declined'];
+
+    /** Proposals the donor has ruled on, one way or the other. */
+    public function scopeDecided($query)
+    {
+        return $query->whereIn('status', self::DECIDED_STATUSES);
+    }
+
+    /** Proposals that won funding. */
+    public function scopeFunded($query)
+    {
+        return $query->where('status', 'awarded');
+    }
+
+    /** Proposals that have gone out to the donor, whatever happened next. */
+    public function scopeSubmitted($query)
+    {
+        return $query->whereIn('status', ['submitted', 'awarded', 'declined']);
+    }
 
     public function isReviewComplete(): bool
     {

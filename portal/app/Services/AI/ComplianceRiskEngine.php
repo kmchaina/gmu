@@ -3,6 +3,7 @@
 namespace App\Services\AI;
 
 use App\Models\Award;
+use App\Support\Days;
 
 class ComplianceRiskEngine
 {
@@ -18,37 +19,37 @@ class ComplianceRiskEngine
         // ── Reports ──────────────────────────────────────────────────────────
         $overdueReports = $award->reports
             ->where('status', 'pending')
-            ->where('due_date', '<', now());
+            ->filter(fn($r) => Days::isPast($r->due_date));
 
         foreach ($overdueReports as $r) {
-            $days = $r->due_date->diffInDays(now());
+            $days = Days::overdueBy($r->due_date);
             $flags[] = [
                 'level'    => $days > 30 ? 'high' : 'medium',
                 'category' => 'Reporting',
-                'message'  => "{$r->report_type} report \"{$r->title}\" is {$days} day(s) overdue.",
+                'message'  => ucfirst($r->report_type) . " report \"{$r->title}\" is {$days} day(s) overdue.",
             ];
         }
 
         $soonReports = $award->reports
             ->where('status', 'pending')
-            ->whereBetween('due_date', [now(), now()->addDays(14)]);
+            ->filter(fn($r) => Days::until($r->due_date) >= 0 && Days::until($r->due_date) <= 14);
 
         foreach ($soonReports as $r) {
-            $days = now()->diffInDays($r->due_date);
+            $days = Days::until($r->due_date);
             $flags[] = [
                 'level'    => 'low',
                 'category' => 'Reporting',
-                'message'  => "{$r->report_type} report due in {$days} day(s).",
+                'message'  => ucfirst($r->report_type) . " report \"{$r->title}\" is due {$days} day(s) from now.",
             ];
         }
 
         // ── Compliance Calendar ───────────────────────────────────────────────
         $overdueCompliance = $award->complianceCalendar
-            ->where('status', 'upcoming')
-            ->where('due_date', '<', now());
+            ->whereIn('status', ['upcoming', 'overdue'])
+            ->filter(fn($item) => Days::isPast($item->due_date));
 
         foreach ($overdueCompliance as $item) {
-            $days = $item->due_date->diffInDays(now());
+            $days = Days::overdueBy($item->due_date);
             $flags[] = [
                 'level'    => $days > 14 ? 'high' : 'medium',
                 'category' => 'Compliance',
@@ -58,15 +59,17 @@ class ComplianceRiskEngine
 
         // ── Ethics Renewals ──────────────────────────────────────────────────
         foreach ($award->ethicsRenewals as $ethics) {
-            if (in_array($ethics->renewal_status, ['renewed'])) continue;
+            if ($ethics->renewal_status === 'renewed') {
+                continue;
+            }
 
-            $daysLeft = now()->diffInDays($ethics->expiry_date, false);
+            $daysLeft = Days::until($ethics->expiry_date);
 
             if ($daysLeft < 0) {
                 $flags[] = [
                     'level'    => 'high',
                     'category' => 'Ethics',
-                    'message'  => "Protocol {$ethics->ethics_number} expired " . abs((int)$daysLeft) . " day(s) ago.",
+                    'message'  => "Protocol {$ethics->ethics_number} expired " . abs($daysLeft) . " day(s) ago.",
                 ];
             } elseif ($daysLeft <= 30) {
                 $flags[] = [
@@ -105,7 +108,8 @@ class ComplianceRiskEngine
             }
 
             // Under-utilisation near award end
-            if ($award->end_date && now()->diffInDays($award->end_date, false) <= 60 && $burnPct < 60) {
+            $daysToEnd = Days::until($award->end_date);
+            if ($award->end_date && $daysToEnd >= 0 && $daysToEnd <= 60 && $burnPct < 60) {
                 $flags[] = [
                     'level'    => 'medium',
                     'category' => 'Budget',
@@ -116,7 +120,7 @@ class ComplianceRiskEngine
 
         // ── Award end approaching ─────────────────────────────────────────────
         if ($award->end_date) {
-            $daysToEnd = now()->diffInDays($award->end_date, false);
+            $daysToEnd = Days::until($award->end_date);
             if ($daysToEnd <= 30 && $daysToEnd >= 0) {
                 $flags[] = [
                     'level'    => 'high',

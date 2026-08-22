@@ -9,6 +9,7 @@ use App\Models\Report;
 use App\Models\Donor;
 use App\Models\EthicsRenewal;
 use App\Models\ComplianceCalendar;
+use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 
 class AnalyticsController extends Controller
@@ -19,11 +20,15 @@ class AnalyticsController extends Controller
         $kpis = [
             'total_awards'          => Award::count(),
             'active_awards'         => Award::where('status', 'active')->count(),
-            'total_funding'         => Award::where('status', 'active')->sum('total_budget'),
+            'total_funding'         => Award::where('status', 'active')->sum('base_total_budget'),
+            'base_currency'         => Money::base(),
             'open_calls'            => FundingCall::where('status', 'open')->count(),
             'proposals_total'       => Proposal::count(),
-            'proposals_approved'    => Proposal::where('status', 'approved')->count(),
+            'proposals_submitted'   => Proposal::submitted()->count(),
+            'proposals_funded'      => Proposal::funded()->count(),
+            'proposals_awaiting'    => Proposal::whereNotIn('status', array_merge(Proposal::DECIDED_STATUSES, ['withdrawn']))->count(),
             'success_rate'          => $this->successRate(),
+            'success_rate_basis'    => Proposal::decided()->count(),
             'overdue_reports'       => Report::where('status', 'pending')->where('due_date', '<', now())->count(),
             'compliance_overdue'    => ComplianceCalendar::where('status', 'upcoming')->where('due_date', '<', now())->count(),
             'ethics_expiring_soon'  => EthicsRenewal::where('expiry_date', '<=', now()->addDays(60))
@@ -45,7 +50,8 @@ class AnalyticsController extends Controller
             ->pluck('total', 'year');
 
         // ── Funding by Donor (horizontal bar, top 8) ─────────────────────────
-        $fundingByDonor = Award::select('donor_id', DB::raw('SUM(total_budget) as total'))
+        // Finding M3: summed in the reporting currency, not raw contract amounts.
+        $fundingByDonor = Award::select('donor_id', DB::raw('SUM(base_total_budget) as total'))
             ->with('donor:id,name,acronym')
             ->groupBy('donor_id')
             ->orderByDesc('total')
@@ -85,11 +91,18 @@ class AnalyticsController extends Controller
         ));
     }
 
+    /**
+     * Share of proposals the donor ruled on that were funded (finding M1).
+     *
+     * Withdrawn proposals never reached a donor, and internally "approved" ones
+     * are still awaiting a decision — neither belongs in the ratio.
+     */
     private function successRate(): float
     {
-        $total    = Proposal::whereIn('status', ['approved', 'declined', 'withdrawn'])->count();
-        $approved = Proposal::where('status', 'approved')->count();
-        return $total > 0 ? round(($approved / $total) * 100, 1) : 0;
+        $decided = Proposal::decided()->count();
+        $funded  = Proposal::funded()->count();
+
+        return $decided > 0 ? round(($funded / $decided) * 100, 1) : 0;
     }
 
     private function reportTimeliness(): array
@@ -109,11 +122,12 @@ class AnalyticsController extends Controller
     private function budgetUtilisation(): array
     {
         return Award::where('status', 'active')
-            ->with('budgets')
+            ->withSum('budgets as allocated_total', 'base_allocated_amount')
+            ->withSum('budgets as spent_total', 'base_spent_amount')
             ->get()
             ->map(function ($award) {
-                $allocated = $award->budgets->sum('allocated_amount');
-                $spent     = $award->budgets->sum('spent_amount');
+                $allocated = (float) $award->allocated_total;
+                $spent     = (float) $award->spent_total;
                 $pct       = $allocated > 0 ? round(($spent / $allocated) * 100, 1) : 0;
                 return [
                     'label'     => $award->contract_number ?? $award->title,

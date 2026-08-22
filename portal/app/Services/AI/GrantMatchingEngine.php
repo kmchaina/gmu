@@ -38,10 +38,14 @@ class GrantMatchingEngine
         }
 
         // 2. Track record — past successful awards (20 pts)
-        $wonGrants = $researcher->proposals()
-            ->where('status', 'approved')
-            ->whereHas('award')
-            ->count();
+        // Finding M2: this asked for status "approved" AND an award, a pair that
+        // cannot exist, so every researcher scored zero here. What counts is
+        // simply whether their proposals turned into awards.
+        // Finding M10: read from the eager-loaded relations rather than firing
+        // a fresh query per researcher.
+        $wonGrants = $researcher->relationLoaded('proposals')
+            ? $researcher->proposals->filter(fn($p) => $p->award !== null)->count()
+            : $researcher->proposals()->has('award')->count();
         if ($wonGrants > 0) {
             $pts = min(20, $wonGrants * 5);
             $score += $pts;
@@ -81,10 +85,9 @@ class GrantMatchingEngine
         }
 
         // 6. No active FCOI conflicts (5 pts bonus)
-        $hasUnresolvedFcoi = $researcher->fcoiDisclosures()
-            ->where('has_conflict', true)
-            ->whereNotIn('status', ['cleared'])
-            ->exists();
+        $hasUnresolvedFcoi = $researcher->relationLoaded('fcoiDisclosures')
+            ? $researcher->fcoiDisclosures->contains(fn($d) => $d->has_conflict && $d->status !== 'cleared')
+            : $researcher->fcoiDisclosures()->where('has_conflict', true)->whereNotIn('status', ['cleared'])->exists();
         if (!$hasUnresolvedFcoi) {
             $score += 5;
             $reasons[] = ['factor' => 'No unresolved FCOI', 'points' => 5, 'detail' => 'No conflict of interest flags'];
@@ -92,9 +95,9 @@ class GrantMatchingEngine
 
         // 7. Budget fit — researcher's historical awards vs call budget (20 pts)
         if ($call->estimated_budget > 0) {
-            $avgPastBudget = \App\Models\Award::whereHas('proposal',
-                fn($q) => $q->where('lead_pi_id', $researcher->id)
-            )->avg('total_budget');
+            $avgPastBudget = $researcher->relationLoaded('proposals')
+                ? $researcher->proposals->pluck('award')->filter()->avg('total_budget')
+                : \App\Models\Award::whereHas('proposal', fn($q) => $q->where('lead_pi_id', $researcher->id))->avg('total_budget');
 
             if ($avgPastBudget > 0) {
                 $ratio = min($avgPastBudget, $call->estimated_budget) /

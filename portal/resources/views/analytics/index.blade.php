@@ -13,7 +13,7 @@
     @php
     $kpiCards = [
         ['label'=>'Active Awards',      'value'=> $kpis['active_awards'],      'icon'=>'fas fa-trophy',       'color'=>'success'],
-        ['label'=>'Total Portfolio',    'value'=> 'USD '.number_format($kpis['total_funding']), 'icon'=>'fas fa-dollar-sign','color'=>'primary'],
+        ['label'=>'Total Portfolio',    'value'=> $kpis['base_currency'].' '.number_format($kpis['total_funding']), 'icon'=>'fas fa-dollar-sign','color'=>'primary'],
         ['label'=>'Success Rate',       'value'=> $kpis['success_rate'].'%',   'icon'=>'fas fa-percentage',   'color'=>'info'],
         ['label'=>'Open Calls',         'value'=> $kpis['open_calls'],         'icon'=>'fas fa-bullhorn',     'color'=>'warning'],
         ['label'=>'Overdue Reports',    'value'=> $kpis['overdue_reports'],    'icon'=>'fas fa-exclamation-circle','color'=>'danger'],
@@ -182,8 +182,8 @@ const danger  = '#e74c3c', warning = '#f39c12', success = '#27ae60', info = '#34
 new Chart(document.getElementById('awardStatusChart'), {
     type: 'doughnut',
     data: {
-        labels: {!! json_encode($awardsByStatus->keys()->map(fn($k) => ucfirst($k))->values()) !!},
-        datasets: [{ data: {!! json_encode($awardsByStatus->values()) !!}, backgroundColor: palette }]
+        labels: {{ Illuminate\Support\Js::from($awardsByStatus->keys()->map(fn($k) => ucfirst($k))->values()) }},
+        datasets: [{ data: {{ Illuminate\Support\Js::from($awardsByStatus->values()) }}, backgroundColor: palette }]
     },
     options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
 });
@@ -192,8 +192,8 @@ new Chart(document.getElementById('awardStatusChart'), {
 new Chart(document.getElementById('proposalStatusChart'), {
     type: 'pie',
     data: {
-        labels: {!! json_encode($proposalsByStatus->keys()->map(fn($k) => ucwords(str_replace('_',' ',$k)))->values()) !!},
-        datasets: [{ data: {!! json_encode($proposalsByStatus->values()) !!}, backgroundColor: palette }]
+        labels: {{ Illuminate\Support\Js::from($proposalsByStatus->keys()->map(fn($k) => ucwords(str_replace('_',' ',$k)))->values()) }},
+        datasets: [{ data: {{ Illuminate\Support\Js::from($proposalsByStatus->values()) }}, backgroundColor: palette }]
     },
     options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
 });
@@ -215,10 +215,10 @@ new Chart(document.getElementById('timelinessChart'), {
 new Chart(document.getElementById('awardsYearChart'), {
     type: 'bar',
     data: {
-        labels: {!! json_encode($awardsPerYear->keys()) !!},
+        labels: {{ Illuminate\Support\Js::from($awardsPerYear->keys()) }},
         datasets: [{
             label: 'Awards',
-            data: {!! json_encode($awardsPerYear->values()) !!},
+            data: {{ Illuminate\Support\Js::from($awardsPerYear->values()) }},
             backgroundColor: '#003366'
         }]
     },
@@ -233,10 +233,10 @@ new Chart(document.getElementById('awardsYearChart'), {
 new Chart(document.getElementById('donorFundingChart'), {
     type: 'bar',
     data: {
-        labels: {!! json_encode(collect($fundingByDonor)->pluck('label')) !!},
+        labels: {{ Illuminate\Support\Js::from(collect($fundingByDonor)->pluck('label')) }},
         datasets: [{
             label: 'Total Funding',
-            data: {!! json_encode(collect($fundingByDonor)->pluck('amount')) !!},
+            data: {{ Illuminate\Support\Js::from(collect($fundingByDonor)->pluck('amount')) }},
             backgroundColor: palette
         }]
     },
