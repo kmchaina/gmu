@@ -1,0 +1,5 @@
+# Root-level ignores (portal/.gitignore covers the Laravel app)
+node_modules/
+*.tmp
+Thumbs.db
+.DS_Store

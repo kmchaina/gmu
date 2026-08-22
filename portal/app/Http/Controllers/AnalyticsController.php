@@ -1,0 +1,130 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Award;
+use App\Models\FundingCall;
+use App\Models\Proposal;
+use App\Models\Report;
+use App\Models\Donor;
+use App\Models\EthicsRenewal;
+use App\Models\ComplianceCalendar;
+use Illuminate\Support\Facades\DB;
+
+class AnalyticsController extends Controller
+{
+    public function index()
+    {
+        // ── Portfolio KPIs ───────────────────────────────────────────────────
+        $kpis = [
+            'total_awards'          => Award::count(),
+            'active_awards'         => Award::where('status', 'active')->count(),
+            'total_funding'         => Award::where('status', 'active')->sum('total_budget'),
+            'open_calls'            => FundingCall::where('status', 'open')->count(),
+            'proposals_total'       => Proposal::count(),
+            'proposals_approved'    => Proposal::where('status', 'approved')->count(),
+            'success_rate'          => $this->successRate(),
+            'overdue_reports'       => Report::where('status', 'pending')->where('due_date', '<', now())->count(),
+            'compliance_overdue'    => ComplianceCalendar::where('status', 'upcoming')->where('due_date', '<', now())->count(),
+            'ethics_expiring_soon'  => EthicsRenewal::where('expiry_date', '<=', now()->addDays(60))
+                                        ->whereNotIn('renewal_status', ['renewed', 'expired'])->count(),
+        ];
+
+        // ── Awards by Status (pie) ───────────────────────────────────────────
+        $awardsByStatus = Award::select('status', DB::raw('count(*) as total'))
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        // ── Awards per Year (bar) ────────────────────────────────────────────
+        $awardsPerYear = Award::select(
+                DB::raw('YEAR(created_at) as year'),
+                DB::raw('count(*) as total')
+            )
+            ->groupBy('year')
+            ->orderBy('year')
+            ->pluck('total', 'year');
+
+        // ── Funding by Donor (horizontal bar, top 8) ─────────────────────────
+        $fundingByDonor = Award::select('donor_id', DB::raw('SUM(total_budget) as total'))
+            ->with('donor:id,name,acronym')
+            ->groupBy('donor_id')
+            ->orderByDesc('total')
+            ->limit(8)
+            ->get()
+            ->map(fn($a) => [
+                'label'  => $a->donor?->acronym ?? $a->donor?->name ?? 'Unknown',
+                'amount' => (float) $a->total,
+            ]);
+
+        // ── Proposals by Status (donut) ──────────────────────────────────────
+        $proposalsByStatus = Proposal::select('status', DB::raw('count(*) as total'))
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        // ── Report submission timeliness (last 12 months) ────────────────────
+        $reportTimeliness = $this->reportTimeliness();
+
+        // ── Budget utilisation across active awards ───────────────────────────
+        $budgetUtilisation = $this->budgetUtilisation();
+
+        // ── Recent audit log entries ─────────────────────────────────────────
+        $recentActivity = \App\Models\ActivityLog::with('user')
+            ->orderByDesc('created_at')
+            ->limit(10)
+            ->get();
+
+        return view('analytics.index', compact(
+            'kpis',
+            'awardsByStatus',
+            'awardsPerYear',
+            'fundingByDonor',
+            'proposalsByStatus',
+            'reportTimeliness',
+            'budgetUtilisation',
+            'recentActivity',
+        ));
+    }
+
+    private function successRate(): float
+    {
+        $total    = Proposal::whereIn('status', ['approved', 'declined', 'withdrawn'])->count();
+        $approved = Proposal::where('status', 'approved')->count();
+        return $total > 0 ? round(($approved / $total) * 100, 1) : 0;
+    }
+
+    private function reportTimeliness(): array
+    {
+        // Submitted reports in the last 12 months — on-time vs late
+        $reports = Report::whereIn('status', ['submitted', 'approved'])
+            ->whereNotNull('submitted_date')
+            ->where('submitted_date', '>=', now()->subMonths(12))
+            ->get(['due_date', 'submitted_date']);
+
+        $onTime = $reports->filter(fn($r) => $r->submitted_date <= $r->due_date)->count();
+        $late   = $reports->count() - $onTime;
+
+        return ['on_time' => $onTime, 'late' => $late, 'total' => $reports->count()];
+    }
+
+    private function budgetUtilisation(): array
+    {
+        return Award::where('status', 'active')
+            ->with('budgets')
+            ->get()
+            ->map(function ($award) {
+                $allocated = $award->budgets->sum('allocated_amount');
+                $spent     = $award->budgets->sum('spent_amount');
+                $pct       = $allocated > 0 ? round(($spent / $allocated) * 100, 1) : 0;
+                return [
+                    'label'     => $award->contract_number ?? $award->title,
+                    'allocated' => (float) $allocated,
+                    'spent'     => (float) $spent,
+                    'pct'       => $pct,
+                    'light'     => $pct > 100 ? 'red' : ($pct > 85 ? 'yellow' : 'green'),
+                ];
+            })
+            ->sortByDesc('pct')
+            ->values()
+            ->all();
+    }
+}
