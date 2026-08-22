@@ -94,16 +94,19 @@ Route::middleware(['auth'])->group(function () {
         Route::get('activity-log/{log}', [ActivityLogController::class, 'show'])->name('activity-log.show');
     });
 
-    // AI Intelligence
-    Route::middleware('role:coordinator,planning_officer,finance_officer')->group(function () {
+    // AI Intelligence. Finding M14: these endpoints call a paid API, so they
+    // are rate limited per user as well as role-gated.
+    Route::middleware(['role:coordinator,planning_officer,finance_officer', 'throttle:20,1'])->group(function () {
         Route::get('ai',                        [AiController::class, 'hub'])->name('ai.hub');
         Route::get('ai/matching',               [AiController::class, 'matchingIndex'])->name('ai.matching');
         Route::get('ai/matching/{call}',        [AiController::class, 'matchCall'])->name('ai.match-call');
         Route::get('ai/risk',                   [AiController::class, 'riskIndex'])->name('ai.risk');
         Route::get('ai/risk/{award}',           [AiController::class, 'riskAnalysis'])->name('ai.risk-analysis');
     });
-    Route::post('ai/report-quality/{report}',   [AiController::class, 'reportQuality'])->name('ai.report-quality');
-    Route::post('ai/draft-section',             [AiController::class, 'draftSection'])->name('ai.draft-section');
+    Route::middleware('throttle:20,1')->group(function () {
+        Route::post('ai/report-quality/{report}', [AiController::class, 'reportQuality'])->name('ai.report-quality');
+        Route::post('ai/draft-section',           [AiController::class, 'draftSection'])->name('ai.draft-section');
+    });
 
     // Proposal Library
     Route::resource('library', LibraryItemsController::class);

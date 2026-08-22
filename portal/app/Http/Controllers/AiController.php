@@ -44,7 +44,9 @@ class AiController extends Controller
 
     public function reportQuality(Request $request, Report $report)
     {
-        $reportText = $request->validate(['text' => 'required|string|min:50'])['text'];
+        $this->authorize('view', $report);
+
+        $reportText = $request->validate(['text' => 'required|string|min:50|max:20000'])['text'];
         $result     = $this->ai->checkReportQuality($report, $reportText);
         return response()->json($result);
     }

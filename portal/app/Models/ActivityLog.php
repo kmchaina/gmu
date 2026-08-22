@@ -30,8 +30,14 @@ class ActivityLog extends Model
         return $this->morphTo('model');
     }
 
-    // Convenience: latest logs across the system
-    public static function latest(int $limit = 50)
+    /**
+     * Convenience: latest logs across the system.
+     *
+     * Finding M15: this used to be called latest(), shadowing the Eloquent
+     * builder method of the same name with an incompatible signature — any
+     * later ActivityLog::latest()->paginate() would have failed obscurely.
+     */
+    public static function mostRecent(int $limit = 50)
     {
         return static::with('user')
             ->orderByDesc('created_at')

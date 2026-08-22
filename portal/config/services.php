@@ -16,7 +16,8 @@ return [
 
     'anthropic' => [
         'api_key' => env('ANTHROPIC_API_KEY'),
-        'model'   => env('ANTHROPIC_MODEL', 'claude-sonnet-4-6'),
+        // Finding M14: the previous default named a retired model id.
+        'model'   => env('ANTHROPIC_MODEL', 'claude-sonnet-5'),
     ],
 
     'postmark' => [
