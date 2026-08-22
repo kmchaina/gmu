@@ -13,8 +13,9 @@ class ResearcherProfileController extends Controller
     {
         $user = auth()->user();
 
-        // PIs and research scientists go straight to their own profile
-        if ($user->hasAnyRole(['pi', 'research_scientist', 'secretary'])) {
+        // Researchers go straight to their own profile; the directory itself is
+        // for the officers who match people to calls.
+        if (! $user->can('viewDirectory', User::class)) {
             return redirect()->route('researchers.show', $user);
         }
 
@@ -28,15 +29,28 @@ class ResearcherProfileController extends Controller
         return view('researchers.index', compact('researchers'));
     }
 
-    // View any researcher's profile (read-only for most; own profile for researchers)
+    /**
+     * A researcher's profile.
+     *
+     * Conflict-of-interest disclosures name private financial interests. They
+     * are shown to the person who made them and to the Coordinator who reviews
+     * them, and to nobody else (finding H3).
+     */
     public function show(User $user)
     {
-        $profile    = $user->researcherProfile;
-        $proposals  = $user->proposals()->with('fundingCall', 'award')->latest()->get();
-        $fcois      = $user->fcoiDisclosures()->with('proposal')->orderByDesc('disclosure_year')->get();
-        $canEdit    = auth()->id() === $user->id || auth()->user()->hasAnyRole(['coordinator', 'planning_officer']);
+        $this->authorize('viewProfile', $user);
 
-        return view('researchers.show', compact('user', 'profile', 'proposals', 'fcois', 'canEdit'));
+        $profile   = $user->researcherProfile;
+        $proposals = $user->proposals()->with('fundingCall', 'award')->latest()->get();
+
+        $canSeeFcoi = auth()->user()->can('viewFcoi', $user);
+        $fcois      = $canSeeFcoi
+            ? $user->fcoiDisclosures()->with('proposal')->orderByDesc('disclosure_year')->get()
+            : collect();
+
+        $canEdit = auth()->user()->can('updateProfile', $user);
+
+        return view('researchers.show', compact('user', 'profile', 'proposals', 'fcois', 'canEdit', 'canSeeFcoi'));
     }
 
     public function edit(User $user)
@@ -105,7 +119,7 @@ class ResearcherProfileController extends Controller
     // FCOI Disclosure store
     public function storeFcoi(Request $request, User $user)
     {
-        $this->authorizeEdit($user);
+        $this->authorize('submitFcoi', $user);
 
         $data = $request->validate([
             'disclosure_year'      => 'required|integer|min:2000|max:2100',
@@ -134,7 +148,7 @@ class ResearcherProfileController extends Controller
     // Coordinator reviews and clears a disclosure
     public function reviewFcoi(Request $request, FcoiDisclosure $disclosure)
     {
-        abort_unless(auth()->user()->hasRole('coordinator'), 403);
+        $this->authorize('review', $disclosure);
 
         $request->validate([
             'status'         => 'required|in:reviewed,cleared',
@@ -154,9 +168,6 @@ class ResearcherProfileController extends Controller
 
     private function authorizeEdit(User $user): void
     {
-        abort_unless(
-            auth()->id() === $user->id || auth()->user()->hasAnyRole(['coordinator', 'planning_officer']),
-            403
-        );
+        $this->authorize('updateProfile', $user);
     }
 }

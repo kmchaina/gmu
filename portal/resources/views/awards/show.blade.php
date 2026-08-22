@@ -90,7 +90,7 @@
                 <tr>
                     <th class="text-muted">Signed Contract</th>
                     <td>
-                        <a href="{{ Storage::url($award->signed_contract) }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                        <a href="{{ route('awards.contract', $award) }}" target="_blank" class="btn btn-sm btn-outline-primary">
                             <i class="fas fa-file-pdf mr-1"></i>Download
                         </a>
                     </td>
@@ -476,7 +476,7 @@
                         </td>
                         <td>
                             @if($renewal->certificate_file)
-                            <a href="{{ Storage::url($renewal->certificate_file) }}" target="_blank"
+                            <a href="{{ route('awards.ethics.certificate', [$award, $renewal]) }}" target="_blank"
                                class="btn btn-xs btn-outline-info" title="Download Certificate">
                                 <i class="fas fa-download"></i>
                             </a>
@@ -575,7 +575,7 @@
                     </div>
                     <div>
                         @if($visit->report_file)
-                        <a href="{{ Storage::url($visit->report_file) }}" target="_blank"
+                        <a href="{{ route('awards.monitoring.report', [$award, $visit]) }}" target="_blank"
                            class="btn btn-xs btn-outline-info mr-1"><i class="fas fa-download"></i></a>
                         @endif
                         @if($canManage)

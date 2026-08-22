@@ -76,7 +76,7 @@
                 @endphp
                 <tr>
                     <td>
-                        <a href="{{ Storage::url($policy->file_path) }}" target="_blank">
+                        <a href="{{ route('donor-policies.show', $policy) }}" target="_blank">
                             <i class="fas fa-file mr-1 text-muted"></i>{{ $policy->title }}
                         </a>
                     </td>
@@ -90,7 +90,7 @@
                     <td>{{ $policy->effective_date ? $policy->effective_date->format('d M Y') : '-' }}</td>
                     <td>{{ $policy->uploadedBy->name }}</td>
                     <td>
-                        <a href="{{ Storage::url($policy->file_path) }}" target="_blank"
+                        <a href="{{ route('donor-policies.show', $policy) }}" target="_blank"
                            class="btn btn-xs btn-outline-primary" title="Download">
                             <i class="fas fa-download"></i>
                         </a>

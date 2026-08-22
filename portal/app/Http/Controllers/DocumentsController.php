@@ -4,13 +4,17 @@ namespace App\Http\Controllers;
 
 use App\Models\Document;
 use App\Support\UploadRules;
+use App\Support\GrantFiles;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class DocumentsController extends Controller
 {
+
     public function index(Request $request)
     {
+        $this->authorize('viewAny', Document::class);
+
         $query = Document::with('uploadedBy');
 
         if (!auth()->user()->hasAnyRole(['coordinator', 'planning_officer'])) {
@@ -34,11 +38,15 @@ class DocumentsController extends Controller
 
     public function create()
     {
+        $this->authorize('create', Document::class);
+
         return view('documents.create');
     }
 
     public function store(Request $request)
     {
+        $this->authorize('create', Document::class);
+
         $data = $request->validate([
             'title'       => 'required|string|max:255',
             'category'    => 'required|in:sop,template,policy,contract,report,audit,other',
@@ -49,7 +57,7 @@ class DocumentsController extends Controller
         ]);
 
         $file = $request->file('file');
-        $path = $file->store('documents', 'public');
+        $path = GrantFiles::store($file, 'documents');
 
         Document::create([
             'uploaded_by' => auth()->id(),
@@ -68,18 +76,32 @@ class DocumentsController extends Controller
             ->with('success', 'Document uploaded successfully.');
     }
 
+    /**
+     * Serve the file itself, after the policy check.
+     *
+     * This used to redirect to a public URL, so the is_public flag governed
+     * only the listing and every file was reachable by anyone (finding C6).
+     */
     public function show(Document $document)
     {
-        return redirect()->away(Storage::url($document->file_path));
+        $this->authorize('view', $document);
+
+        $this->authorize('download', $document);
+
+        return GrantFiles::download($document->file_path, $document->file_name);
     }
 
     public function edit(Document $document)
     {
+        $this->authorize('update', $document);
+
         return view('documents.edit', compact('document'));
     }
 
     public function update(Request $request, Document $document)
     {
+        $this->authorize('update', $document);
+
         $data = $request->validate([
             'title'       => 'required|string|max:255',
             'category'    => 'required|in:sop,template,policy,contract,report,audit,other',
@@ -102,6 +124,9 @@ class DocumentsController extends Controller
 
     public function destroy(Document $document)
     {
+        $this->authorize('delete', $document);
+
+        GrantFiles::delete($document->file_path);
         $document->delete();
         return redirect()->route('documents.index')
             ->with('success', 'Document removed.');

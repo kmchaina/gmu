@@ -100,7 +100,7 @@
                     <label>Replace Report File</label>
                     @if($report->file_path)
                         <div class="mb-2">
-                            <a href="{{ Storage::url($report->file_path) }}" target="_blank" class="btn btn-sm btn-outline-info">
+                            <a href="{{ route('reports.download', $report) }}" target="_blank" class="btn btn-sm btn-outline-info">
                                 <i class="fas fa-download mr-1"></i>Current File
                             </a>
                         </div>

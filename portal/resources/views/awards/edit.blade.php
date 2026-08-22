@@ -147,7 +147,7 @@
                     <label>Replace Signed Contract</label>
                     @if($award->signed_contract)
                         <div class="mb-2">
-                            <a href="{{ Storage::url($award->signed_contract) }}" target="_blank" class="btn btn-sm btn-outline-info">
+                            <a href="{{ route('awards.contract', $award) }}" target="_blank" class="btn btn-sm btn-outline-info">
                                 <i class="fas fa-file mr-1"></i>Current Contract
                             </a>
                         </div>

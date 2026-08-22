@@ -10,14 +10,23 @@ use Illuminate\Http\Request;
 
 class ProposalsController extends Controller
 {
+
     public function index(Request $request)
     {
+        $this->authorize('viewAny', Proposal::class);
+
         $user  = auth()->user();
         $query = Proposal::with('fundingCall.donor', 'leadPi', 'assignedOfficer')
             ->withCount('reviews');
 
-        if ($user->isPI() || $user->isResearchScientist()) {
-            $query->where('lead_pi_id', $user->id);
+        // GMU officers and technical reviewers see the whole pipeline;
+        // researchers see the proposals they are actually on (finding C4).
+        if (! $user->isGmuStaff() && ! $user->hasRole('research_scientist')) {
+            $query->where(function ($q) use ($user) {
+                $q->where('lead_pi_id', $user->id)
+                  ->orWhere('assigned_officer_id', $user->id)
+                  ->orWhereHas('teamMembers', fn($t) => $t->where('user_id', $user->id));
+            });
         }
 
         if ($request->status) {
@@ -35,6 +44,8 @@ class ProposalsController extends Controller
 
     public function create(Request $request)
     {
+        $this->authorize('create', Proposal::class);
+
         $calls = FundingCall::where('status', 'open')->orderBy('deadline')->get();
         $pis   = User::whereHas('role', fn($q) => $q->whereIn('name', ['pi', 'research_scientist']))
             ->where('is_active', true)->orderBy('name')->get();
@@ -48,6 +59,8 @@ class ProposalsController extends Controller
 
     public function store(Request $request)
     {
+        $this->authorize('create', Proposal::class);
+
         $data = $request->validate([
             'funding_call_id'       => 'required|exists:funding_calls,id',
             'lead_pi_id'            => 'required|exists:users,id',
@@ -72,30 +85,28 @@ class ProposalsController extends Controller
 
     public function show(Proposal $proposal)
     {
+        $this->authorize('view', $proposal);
+
         $proposal->load('fundingCall.donor', 'leadPi', 'assignedOfficer', 'teamMembers.user', 'reviews.reviewer', 'documents', 'award');
 
         $user = auth()->user();
-        $canReview = $user->hasAnyRole(['coordinator', 'research_scientist', 'legal_officer', 'finance_officer']);
 
-        $userReview = null;
-        if ($canReview) {
-            $reviewTypeMap = [
-                'research_scientist' => 'technical',
-                'legal_officer'      => 'compliance',
-                'finance_officer'    => 'budget',
-                'coordinator'        => null,
-            ];
-            $reviewType = $reviewTypeMap[$user->role?->name] ?? null;
-            if ($reviewType) {
-                $userReview = $proposal->reviews->where('review_type', $reviewType)->first();
-            }
-        }
+        // Only the officer who owns a review track may file it, and never on a
+        // proposal they are part of (finding H2).
+        $canReview  = $user->can('review', $proposal);
+        $reviewType = $user->reviewTrack();
+
+        $userReview = ($canReview && $reviewType)
+            ? $proposal->reviews->firstWhere('review_type', $reviewType)
+            : null;
 
         return view('proposals.show', compact('proposal', 'canReview', 'userReview'));
     }
 
     public function edit(Proposal $proposal)
     {
+        $this->authorize('update', $proposal);
+
         $calls = FundingCall::where('status', 'open')->orWhere('id', $proposal->funding_call_id)->orderBy('deadline')->get();
         $pis   = User::whereHas('role', fn($q) => $q->whereIn('name', ['pi', 'research_scientist']))
             ->where('is_active', true)->orderBy('name')->get();
@@ -107,6 +118,8 @@ class ProposalsController extends Controller
 
     public function update(Request $request, Proposal $proposal)
     {
+        $this->authorize('update', $proposal);
+
         $data = $request->validate([
             'funding_call_id'       => 'required|exists:funding_calls,id',
             'lead_pi_id'            => 'required|exists:users,id',
@@ -131,6 +144,8 @@ class ProposalsController extends Controller
 
     public function destroy(Proposal $proposal)
     {
+        $this->authorize('delete', $proposal);
+
         $proposal->delete();
         return redirect()->route('proposals.index')
             ->with('success', 'Proposal removed.');
@@ -138,19 +153,10 @@ class ProposalsController extends Controller
 
     public function submitReview(Request $request, Proposal $proposal)
     {
-        $user = auth()->user();
+        $this->authorize('review', $proposal);
 
-        $reviewTypeMap = [
-            'research_scientist' => 'technical',
-            'legal_officer'      => 'compliance',
-            'finance_officer'    => 'budget',
-        ];
-
-        $reviewType = $reviewTypeMap[$user->role?->name] ?? null;
-
-        if (!$reviewType) {
-            abort(403, 'You are not assigned a review role for proposals.');
-        }
+        $user       = auth()->user();
+        $reviewType = $user->reviewTrack();
 
         $request->validate([
             'status'   => 'required|in:approved,rejected,needs_revision',

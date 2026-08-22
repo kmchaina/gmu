@@ -92,7 +92,7 @@
 
                 @if($report->file_path)
                 <hr>
-                <a href="{{ Storage::url($report->file_path) }}" target="_blank" class="btn btn-outline-primary">
+                <a href="{{ route('reports.download', $report) }}" target="_blank" class="btn btn-outline-primary">
                     <i class="fas fa-download mr-1"></i>Download Report File
                 </a>
                 @endif

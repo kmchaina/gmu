@@ -2,16 +2,30 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Traits\LogsActivity;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, SoftDeletes, LogsActivity;
+
+    /** Roles that make up the GMU itself, as opposed to the researchers it serves. */
+    public const GMU_STAFF = ['coordinator', 'planning_officer', 'finance_officer', 'legal_officer', 'secretary'];
+
+    /** Roles that lead or contribute to research. */
+    public const RESEARCH_ROLES = ['pi', 'research_scientist'];
+
+    /** Which review track each role owns in the internal review workflow. */
+    public const REVIEW_TRACKS = [
+        'research_scientist' => 'technical',
+        'legal_officer'      => 'compliance',
+        'finance_officer'    => 'budget',
+    ];
 
     /**
      * The attributes that are mass assignable.
@@ -19,7 +33,8 @@ class User extends Authenticatable
      * @var list<string>
      */
     protected $fillable = [
-        'name', 'email', 'password', 'role_id', 'phone', 'department', 'research_center', 'is_active',
+        'name', 'email', 'password', 'role_id', 'phone', 'department', 'research_center',
+        'is_active', 'must_change_password',
     ];
 
     protected $hidden = ['password', 'remember_token'];
@@ -30,7 +45,19 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'must_change_password' => 'boolean',
         ];
+    }
+
+    /** Account changes — role, activation, credentials — are audit-relevant (finding M16). */
+    protected function auditableFields(): array
+    {
+        return ['name', 'email', 'role_id', 'phone', 'department', 'research_center', 'is_active'];
+    }
+
+    public function auditLabel(): string
+    {
+        return 'User: ' . ($this->name ?? '#' . $this->getKey()) . ' <' . $this->email . '>';
     }
 
     public function role()
@@ -45,7 +72,7 @@ class User extends Authenticatable
 
     public function hasAnyRole(array $roles): bool
     {
-        return in_array($this->role?->name, $roles);
+        return in_array($this->role?->name, $roles, true);
     }
 
     public function isCoordinator(): bool { return $this->hasRole('coordinator'); }
@@ -55,6 +82,24 @@ class User extends Authenticatable
     public function isPlanningOfficer(): bool { return $this->hasRole('planning_officer'); }
     public function isResearchScientist(): bool { return $this->hasRole('research_scientist'); }
     public function isSecretary(): bool { return $this->hasRole('secretary'); }
+
+    /** Works for the GMU (any officer role). */
+    public function isGmuStaff(): bool
+    {
+        return $this->hasAnyRole(self::GMU_STAFF);
+    }
+
+    /** Leads or contributes to research rather than administering grants. */
+    public function isResearcher(): bool
+    {
+        return $this->hasAnyRole(self::RESEARCH_ROLES);
+    }
+
+    /** The review track this user owns, or null if they review nothing. */
+    public function reviewTrack(): ?string
+    {
+        return self::REVIEW_TRACKS[$this->role?->name] ?? null;
+    }
 
     public function proposals()
     {

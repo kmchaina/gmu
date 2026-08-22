@@ -10,6 +10,8 @@ class AwardBudgetsController extends Controller
 {
     public function store(Request $request, Award $award)
     {
+        $this->authorize('manageBudget', $award);
+
         $request->validate([
             'category'         => 'required|string|max:100',
             'allocated_amount' => 'required|numeric|min:0',
@@ -31,6 +33,8 @@ class AwardBudgetsController extends Controller
 
     public function destroy(Award $award, AwardBudget $budget)
     {
+        $this->authorize('manageBudget', $award);
+
         $budget->delete();
         return redirect()->route('awards.show', $award)
             ->with('success', 'Budget line removed.');

@@ -10,6 +10,8 @@ class ComplianceCalendarController extends Controller
 {
     public function store(Request $request, Award $award)
     {
+        $this->authorize('manageCompliance', $award);
+
         $request->validate([
             'title'            => 'required|string|max:255',
             'deliverable_type' => 'required|string|max:100',
@@ -31,6 +33,8 @@ class ComplianceCalendarController extends Controller
 
     public function update(Request $request, Award $award, ComplianceCalendar $item)
     {
+        $this->authorize('manageCompliance', $award);
+
         $request->validate([
             'status' => 'required|in:upcoming,submitted,overdue,waived',
         ]);
@@ -47,6 +51,8 @@ class ComplianceCalendarController extends Controller
 
     public function destroy(Award $award, ComplianceCalendar $item)
     {
+        $this->authorize('manageCompliance', $award);
+
         $item->delete();
         return redirect()->route('awards.show', $award)
             ->with('success', 'Compliance event removed.');

@@ -6,18 +6,26 @@ use App\Models\Award;
 use App\Models\Donor;
 use App\Models\Proposal;
 use App\Support\UploadRules;
+use App\Support\GrantFiles;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class AwardsController extends Controller
 {
+
     public function index(Request $request)
     {
+        $this->authorize('viewAny', Award::class);
+
         $user  = auth()->user();
         $query = Award::with('proposal.leadPi', 'donor')->withCount('reports');
 
-        if ($user->isPI() || $user->isResearchScientist()) {
-            $query->whereHas('proposal', fn($q) => $q->where('lead_pi_id', $user->id));
+        // Researchers see the grants they are on; GMU officers see the portfolio.
+        if (! $user->isGmuStaff()) {
+            $query->whereHas('proposal', function ($q) use ($user) {
+                $q->where('lead_pi_id', $user->id)
+                  ->orWhereHas('teamMembers', fn($t) => $t->where('user_id', $user->id));
+            });
         }
 
         if ($request->status) {
@@ -43,6 +51,8 @@ class AwardsController extends Controller
 
     public function create(Request $request)
     {
+        $this->authorize('create', Award::class);
+
         $donors   = Donor::orderBy('name')->get();
         $proposals = Proposal::with('leadPi', 'fundingCall.donor')
             ->whereIn('status', ['approved', 'submitted'])
@@ -59,6 +69,8 @@ class AwardsController extends Controller
 
     public function store(Request $request)
     {
+        $this->authorize('create', Award::class);
+
         $data = $request->validate([
             'proposal_id'     => 'required|exists:proposals,id|unique:awards,proposal_id',
             'donor_id'        => 'required|exists:donors,id',
@@ -75,8 +87,7 @@ class AwardsController extends Controller
         ]);
 
         if ($request->hasFile('signed_contract')) {
-            $data['signed_contract'] = $request->file('signed_contract')
-                ->store('award-contracts', 'public');
+            $data['signed_contract'] = GrantFiles::store($request->file('signed_contract'), 'award-contracts');
         }
 
         $award = Award::create($data);
@@ -89,6 +100,8 @@ class AwardsController extends Controller
 
     public function show(Award $award)
     {
+        $this->authorize('view', $award);
+
         $award->load('proposal.leadPi', 'donor', 'budgets', 'reports', 'complianceCalendar', 'monitoringVisits', 'ethicsRenewals');
 
         return view('awards.show', compact('award'));
@@ -96,12 +109,16 @@ class AwardsController extends Controller
 
     public function edit(Award $award)
     {
+        $this->authorize('update', $award);
+
         $donors = Donor::orderBy('name')->get();
         return view('awards.edit', compact('award', 'donors'));
     }
 
     public function update(Request $request, Award $award)
     {
+        $this->authorize('update', $award);
+
         $data = $request->validate([
             'contract_number' => 'required|string|max:100|unique:awards,contract_number,' . $award->id,
             'title'           => 'required|string|max:255',
@@ -116,8 +133,7 @@ class AwardsController extends Controller
         ]);
 
         if ($request->hasFile('signed_contract')) {
-            $data['signed_contract'] = $request->file('signed_contract')
-                ->store('award-contracts', 'public');
+            $data['signed_contract'] = GrantFiles::replace($request->file('signed_contract'), 'award-contracts', $award->signed_contract);
         }
 
         $award->update($data);
@@ -126,8 +142,18 @@ class AwardsController extends Controller
             ->with('success', 'Award updated successfully.');
     }
 
+    /** The signed contract — the award team and GMU officers only. */
+    public function downloadContract(Award $award)
+    {
+        $this->authorize('view', $award);
+
+        return GrantFiles::download($award->signed_contract);
+    }
+
     public function destroy(Award $award)
     {
+        $this->authorize('delete', $award);
+
         $award->delete();
         return redirect()->route('awards.index')
             ->with('success', 'Award removed.');

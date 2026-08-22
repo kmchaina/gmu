@@ -38,7 +38,13 @@ class ProfileController extends Controller
     }
 
     /**
-     * Delete the user's account.
+     * Close the user's own account.
+     *
+     * Finding C5: this used to hard-delete the user row, which cascaded through
+     * their proposals, awards, reports, budgets, compliance items and every
+     * funding call they had posted. Accounts are deactivated instead — the
+     * grant record has to outlive the person who entered it. Only the
+     * Coordinator can reinstate an account.
      */
     public function destroy(Request $request): RedirectResponse
     {
@@ -47,14 +53,13 @@ class ProfileController extends Controller
         ]);
 
         $user = $request->user();
+        $user->update(['is_active' => false]);
 
         Auth::logout();
-
-        $user->delete();
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return Redirect::to('/');
+        return Redirect::route('login')->with('status', 'Your account has been closed. Contact the GMU Coordinator if you need it reopened.');
     }
 }

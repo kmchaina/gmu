@@ -10,8 +10,11 @@ use Illuminate\Support\Facades\Hash;
 
 class UsersController extends Controller
 {
+
     public function index(Request $request)
     {
+        $this->authorize('viewAny', User::class);
+
         $query = User::with('role');
 
         if ($request->role) {
@@ -40,12 +43,16 @@ class UsersController extends Controller
 
     public function create()
     {
+        $this->authorize('create', User::class);
+
         $roles = Role::orderBy('display_name')->get();
         return view('admin.users.create', compact('roles'));
     }
 
     public function store(Request $request)
     {
+        $this->authorize('create', User::class);
+
         $data = $request->validate([
             'name'            => 'required|string|max:255',
             'email'           => 'required|email|unique:users,email',
@@ -59,6 +66,8 @@ class UsersController extends Controller
 
         $data['password']  = Hash::make($data['password']);
         $data['is_active'] = $request->boolean('is_active', true);
+        // The Coordinator picked this password, so the user must replace it (H4).
+        $data['must_change_password'] = true;
 
         User::create($data);
 
@@ -68,18 +77,24 @@ class UsersController extends Controller
 
     public function show(User $user)
     {
+        $this->authorize('view', $user);
+
         $user->load('role');
         return view('admin.users.show', compact('user'));
     }
 
     public function edit(User $user)
     {
+        $this->authorize('update', $user);
+
         $roles = Role::orderBy('display_name')->get();
         return view('admin.users.edit', compact('user', 'roles'));
     }
 
     public function update(Request $request, User $user)
     {
+        $this->authorize('update', $user);
+
         $data = $request->validate([
             'name'            => 'required|string|max:255',
             'email'           => 'required|email|unique:users,email,' . $user->id,
@@ -93,6 +108,7 @@ class UsersController extends Controller
 
         if ($request->filled('password')) {
             $data['password'] = Hash::make($data['password']);
+            $data['must_change_password'] = true;
         } else {
             unset($data['password']);
         }
@@ -107,6 +123,8 @@ class UsersController extends Controller
 
     public function destroy(User $user)
     {
+        $this->authorize('delete', $user);
+
         if ($user->id === auth()->id()) {
             return back()->with('error', 'You cannot delete your own account.');
         }

@@ -72,7 +72,7 @@
                 <div class="form-group">
                     <label>Current File</label>
                     <p>
-                        <a href="{{ Storage::url($document->file_path) }}" target="_blank" class="btn btn-sm btn-outline-info">
+                        <a href="{{ route('documents.show', $document) }}" target="_blank" class="btn btn-sm btn-outline-info">
                             <i class="fas fa-download mr-1"></i>{{ $document->file_name }} (v{{ $document->version }})
                         </a>
                     </p>

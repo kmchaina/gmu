@@ -149,7 +149,7 @@
                     <label>Call Document / Guidelines</label>
                     @if($call->call_document)
                         <div class="mb-2">
-                            <a href="{{ Storage::url($call->call_document) }}" target="_blank" class="btn btn-sm btn-outline-info">
+                            <a href="{{ route('calls.document', $call) }}" target="_blank" class="btn btn-sm btn-outline-info">
                                 <i class="fas fa-file mr-1"></i>Current Document
                             </a>
                             <small class="text-muted d-block mt-1">Upload a new file to replace it.</small>

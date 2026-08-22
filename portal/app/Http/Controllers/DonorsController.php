@@ -7,8 +7,11 @@ use Illuminate\Http\Request;
 
 class DonorsController extends Controller
 {
+
     public function index(Request $request)
     {
+        $this->authorize('viewAny', Donor::class);
+
         $query = Donor::withCount('fundingCalls', 'awards', 'policies');
 
         if ($request->search) {
@@ -30,11 +33,15 @@ class DonorsController extends Controller
 
     public function create()
     {
+        $this->authorize('create', Donor::class);
+
         return view('donors.create');
     }
 
     public function store(Request $request)
     {
+        $this->authorize('create', Donor::class);
+
         $data = $request->validate([
             'name'          => 'required|string|max:255',
             'acronym'       => 'nullable|string|max:20',
@@ -57,6 +64,8 @@ class DonorsController extends Controller
 
     public function show(Donor $donor)
     {
+        $this->authorize('view', $donor);
+
         $donor->load([
             'fundingCalls' => fn($q) => $q->orderBy('deadline', 'desc')->limit(10),
             'awards'       => fn($q) => $q->with('proposal.leadPi')->orderBy('created_at', 'desc')->limit(10),
@@ -68,11 +77,15 @@ class DonorsController extends Controller
 
     public function edit(Donor $donor)
     {
+        $this->authorize('update', $donor);
+
         return view('donors.edit', compact('donor'));
     }
 
     public function update(Request $request, Donor $donor)
     {
+        $this->authorize('update', $donor);
+
         $data = $request->validate([
             'name'          => 'required|string|max:255',
             'acronym'       => 'nullable|string|max:20',
@@ -91,6 +104,8 @@ class DonorsController extends Controller
 
     public function destroy(Donor $donor)
     {
+        $this->authorize('delete', $donor);
+
         if ($donor->fundingCalls()->count() > 0 || $donor->awards()->count() > 0) {
             return redirect()->route('donors.show', $donor)
                 ->with('error', 'Cannot delete donor — they have linked funding calls or awards.');

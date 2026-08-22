@@ -14,6 +14,8 @@ class NotificationsController extends Controller
 
     public function markRead(\App\Models\GmuNotification $notification)
     {
+        $this->authorize('update', $notification);
+
         $notification->markAsRead();
         return back();
     }

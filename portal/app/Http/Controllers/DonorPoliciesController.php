@@ -5,12 +5,16 @@ namespace App\Http\Controllers;
 use App\Models\DonorPolicy;
 use App\Models\Donor;
 use App\Support\UploadRules;
+use App\Support\GrantFiles;
 use Illuminate\Http\Request;
 
 class DonorPoliciesController extends Controller
 {
+
     public function index(Request $request)
     {
+        $this->authorize('viewAny', DonorPolicy::class);
+
         $query = DonorPolicy::with('donor', 'uploadedBy');
 
         if ($request->donor_id) {
@@ -33,6 +37,8 @@ class DonorPoliciesController extends Controller
 
     public function create(Request $request)
     {
+        $this->authorize('create', DonorPolicy::class);
+
         $donors = Donor::orderBy('name')->get();
         $selectedDonor = $request->donor_id ? Donor::find($request->donor_id) : null;
         return view('donor-policies.create', compact('donors', 'selectedDonor'));
@@ -40,6 +46,8 @@ class DonorPoliciesController extends Controller
 
     public function store(Request $request)
     {
+        $this->authorize('create', DonorPolicy::class);
+
         $data = $request->validate([
             'donor_id'       => 'required|exists:donors,id',
             'title'          => 'required|string|max:255',
@@ -51,7 +59,7 @@ class DonorPoliciesController extends Controller
         ]);
 
         $file = $request->file('file');
-        $path = $file->store('donor-policies', 'public');
+        $path = GrantFiles::store($file, 'donor-policies');
 
         DonorPolicy::create([
             'donor_id'       => $data['donor_id'],
@@ -71,17 +79,25 @@ class DonorPoliciesController extends Controller
 
     public function show(DonorPolicy $donorPolicy)
     {
-        return redirect(\Storage::url($donorPolicy->file_path));
+        $this->authorize('view', $donorPolicy);
+
+        $this->authorize('download', $donorPolicy);
+
+        return GrantFiles::download($donorPolicy->file_path, $donorPolicy->file_name);
     }
 
     public function edit(DonorPolicy $donorPolicy)
     {
+        $this->authorize('update', $donorPolicy);
+
         $donors = Donor::orderBy('name')->get();
         return view('donor-policies.edit', compact('donorPolicy', 'donors'));
     }
 
     public function update(Request $request, DonorPolicy $donorPolicy)
     {
+        $this->authorize('update', $donorPolicy);
+
         $data = $request->validate([
             'donor_id'       => 'required|exists:donors,id',
             'title'          => 'required|string|max:255',
@@ -94,7 +110,7 @@ class DonorPoliciesController extends Controller
 
         if ($request->hasFile('file')) {
             $file = $request->file('file');
-            $data['file_path'] = $file->store('donor-policies', 'public');
+            $data['file_path'] = GrantFiles::replace($file, 'donor-policies', $donorPolicy->file_path);
             $data['file_name'] = $file->getClientOriginalName();
         }
 
@@ -106,6 +122,9 @@ class DonorPoliciesController extends Controller
 
     public function destroy(DonorPolicy $donorPolicy)
     {
+        $this->authorize('delete', $donorPolicy);
+
+        GrantFiles::delete($donorPolicy->file_path);
         $donorPolicy->delete();
         return redirect()->route('donor-policies.index')
             ->with('success', 'Policy removed.');

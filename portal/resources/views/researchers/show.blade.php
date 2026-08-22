@@ -182,7 +182,8 @@
         </div>
         @endif
 
-        {{-- FCOI Disclosures --}}
+        {{-- FCOI Disclosures — confidential to the researcher and the Coordinator (finding H3) --}}
+        @if($canSeeFcoi)
         <div class="card card-outline card-warning">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h3 class="card-title">FCOI Disclosures</h3>
@@ -259,6 +260,12 @@
                                 &middot; {{ $fcoi->reviewer_notes }}
                             @endif
                         </small>
+                        @if($fcoi->has_conflict && $fcoi->conflict_description)
+                            <div class="small mt-1">{{ $fcoi->conflict_description }}</div>
+                        @endif
+                        @if($fcoi->management_plan)
+                            <div class="small text-muted mt-1"><em>Management plan:</em> {{ $fcoi->management_plan }}</div>
+                        @endif
                     </div>
                     <div class="ml-2 text-right">
                         @php $b = match($fcoi->status){ 'cleared'=>'success','reviewed'=>'info','submitted'=>'warning',default=>'secondary' }; @endphp
@@ -284,6 +291,7 @@
                 @endforelse
             </div>
         </div>
+        @endif
 
     </div>
 </div>

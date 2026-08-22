@@ -108,7 +108,7 @@
 
                 @if($call->call_document)
                 <hr>
-                <a href="{{ Storage::url($call->call_document) }}" target="_blank" class="btn btn-outline-primary">
+                <a href="{{ route('calls.document', $call) }}" target="_blank" class="btn btn-outline-primary">
                     <i class="fas fa-file-pdf mr-1"></i> Download Call Document / Guidelines
                 </a>
                 @endif

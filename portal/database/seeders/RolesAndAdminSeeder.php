@@ -2,13 +2,21 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Models\Role;
+use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class RolesAndAdminSeeder extends Seeder
 {
     /**
-     * Run the database seeds.
+     * Seed the GMU roles and the first Coordinator account.
+     *
+     * Audit finding H4: this used to hardcode the administrator password, so
+     * every copy of the source carried a working credential for every install.
+     * The password now comes from GMU_ADMIN_PASSWORD, or is generated and
+     * printed once, and the account cannot be used until it is changed.
      */
     public function run(): void
     {
@@ -23,21 +31,41 @@ class RolesAndAdminSeeder extends Seeder
         ];
 
         foreach ($roles as $role) {
-            \App\Models\Role::firstOrCreate(['name' => $role['name']], $role);
+            Role::firstOrCreate(['name' => $role['name']], $role);
         }
 
-        $coordinatorRole = \App\Models\Role::where('name', 'coordinator')->first();
+        $email = env('GMU_ADMIN_EMAIL', 'admin@nimr.or.tz');
 
-        \App\Models\User::firstOrCreate(
-            ['email' => 'admin@nimr.or.tz'],
-            [
-                'name'       => 'GMU Administrator',
-                'email'      => 'admin@nimr.or.tz',
-                'password'   => \Illuminate\Support\Facades\Hash::make('Admin@NIMR2026'),
-                'role_id'    => $coordinatorRole->id,
-                'department' => 'Grants Management Unit',
-                'is_active'  => true,
-            ]
-        );
+        if (User::withTrashed()->where('email', $email)->exists()) {
+            $this->command?->info("Administrator {$email} already exists — password left untouched.");
+
+            return;
+        }
+
+        $password  = env('GMU_ADMIN_PASSWORD');
+        $generated = $password === null;
+        $password ??= Str::password(20, symbols: false);
+
+        User::create([
+            'name'                 => 'GMU Administrator',
+            'email'                => $email,
+            'password'             => Hash::make($password),
+            'role_id'              => Role::where('name', 'coordinator')->value('id'),
+            'department'           => 'Grants Management Unit',
+            'is_active'            => true,
+            'must_change_password' => true,
+        ]);
+
+        $this->command?->newLine();
+        $this->command?->info("GMU Coordinator account created: {$email}");
+
+        if ($generated) {
+            $this->command?->warn("Generated password: {$password}");
+            $this->command?->comment('This is shown once. Sign in with it and set your own password immediately.');
+        } else {
+            $this->command?->comment('Password taken from GMU_ADMIN_PASSWORD. It must be changed at first sign-in.');
+        }
+
+        $this->command?->newLine();
     }
 }

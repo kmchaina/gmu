@@ -6,12 +6,16 @@ use App\Models\FundingCall;
 use App\Models\Donor;
 use App\Models\CallInterest;
 use App\Support\UploadRules;
+use App\Support\GrantFiles;
 use Illuminate\Http\Request;
 
 class CallsController extends Controller
 {
+
     public function index(Request $request)
     {
+        $this->authorize('viewAny', FundingCall::class);
+
         $query = FundingCall::with('donor', 'postedBy')
             ->withCount('interests', 'proposals');
 
@@ -40,12 +44,16 @@ class CallsController extends Controller
 
     public function create()
     {
+        $this->authorize('create', FundingCall::class);
+
         $donors = Donor::orderBy('name')->get();
         return view('calls.create', compact('donors'));
     }
 
     public function store(Request $request)
     {
+        $this->authorize('create', FundingCall::class);
+
         $data = $request->validate([
             'title'               => 'required|string|max:255',
             'donor_id'            => 'required|exists:donors,id',
@@ -65,8 +73,7 @@ class CallsController extends Controller
         $data['posted_by'] = auth()->id();
 
         if ($request->hasFile('call_document')) {
-            $data['call_document'] = $request->file('call_document')
-                ->store('call-documents', 'public');
+            $data['call_document'] = GrantFiles::store($request->file('call_document'), 'call-documents');
         }
 
         FundingCall::create($data);
@@ -77,24 +84,34 @@ class CallsController extends Controller
 
     public function show(FundingCall $call)
     {
-        $call->load('donor', 'postedBy', 'interests.user', 'proposals');
+        $this->authorize('view', $call);
 
-        $userInterest = null;
-        if (auth()->user()->isPI() || auth()->user()->isResearchScientist()) {
-            $userInterest = $call->interests->where('user_id', auth()->id())->first();
-        }
+        $call->load('donor', 'postedBy', 'proposals');
 
-        return view('calls.show', compact('call', 'userInterest'));
+        // Expressions of interest name colleagues and their motivations; only
+        // the GMU sees the full list, everyone else sees their own.
+        $canSeeInterests = auth()->user()->can('viewInterests', $call);
+        $call->setRelation('interests', $canSeeInterests
+            ? $call->interests()->with('user')->get()
+            : $call->interests()->with('user')->where('user_id', auth()->id())->get());
+
+        $userInterest = $call->interests->firstWhere('user_id', auth()->id());
+
+        return view('calls.show', compact('call', 'userInterest', 'canSeeInterests'));
     }
 
     public function edit(FundingCall $call)
     {
+        $this->authorize('update', $call);
+
         $donors = Donor::orderBy('name')->get();
         return view('calls.edit', compact('call', 'donors'));
     }
 
     public function update(Request $request, FundingCall $call)
     {
+        $this->authorize('update', $call);
+
         $data = $request->validate([
             'title'               => 'required|string|max:255',
             'donor_id'            => 'required|exists:donors,id',
@@ -112,8 +129,7 @@ class CallsController extends Controller
         ]);
 
         if ($request->hasFile('call_document')) {
-            $data['call_document'] = $request->file('call_document')
-                ->store('call-documents', 'public');
+            $data['call_document'] = GrantFiles::replace($request->file('call_document'), 'call-documents', $call->call_document);
         }
 
         $call->update($data);
@@ -124,13 +140,25 @@ class CallsController extends Controller
 
     public function destroy(FundingCall $call)
     {
+        $this->authorize('delete', $call);
+
         $call->delete();
         return redirect()->route('calls.index')
             ->with('success', 'Funding call removed.');
     }
 
+    /** The call document itself — readable by anyone who may see the call. */
+    public function downloadDocument(FundingCall $call)
+    {
+        $this->authorize('view', $call);
+
+        return GrantFiles::download($call->call_document);
+    }
+
     public function expressInterest(Request $request, FundingCall $call)
     {
+        $this->authorize('expressInterest', $call);
+
         $request->validate([
             'motivation'           => 'required|string|min:50',
             'relevant_experience'  => 'required|string|min:30',
@@ -151,6 +179,8 @@ class CallsController extends Controller
 
     public function selectTeam(Request $request, FundingCall $call)
     {
+        $this->authorize('selectTeam', $call);
+
         $request->validate([
             'selected_user_ids'   => 'required|array|min:1',
             'selected_user_ids.*' => 'exists:users,id',

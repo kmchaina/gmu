@@ -7,8 +7,11 @@ use Illuminate\Http\Request;
 
 class LibraryItemsController extends Controller
 {
+
     public function index(Request $request)
     {
+        $this->authorize('viewAny', LibraryItem::class);
+
         $query = LibraryItem::with('createdBy')->orderByDesc('updated_at');
 
         if ($request->filled('category')) {
@@ -35,12 +38,16 @@ class LibraryItemsController extends Controller
 
     public function create()
     {
+        $this->authorize('create', LibraryItem::class);
+
         $categories = LibraryItem::categories();
         return view('library.create', compact('categories'));
     }
 
     public function store(Request $request)
     {
+        $this->authorize('create', LibraryItem::class);
+
         $data = $request->validate([
             'title'            => 'required|string|max:255',
             'category'         => 'required|in:' . implode(',', array_keys(LibraryItem::categories())),
@@ -62,18 +69,24 @@ class LibraryItemsController extends Controller
 
     public function show(LibraryItem $library)
     {
+        $this->authorize('view', $library);
+
         $library->load('createdBy', 'updatedBy');
         return view('library.show', compact('library'));
     }
 
     public function edit(LibraryItem $library)
     {
+        $this->authorize('update', $library);
+
         $categories = LibraryItem::categories();
         return view('library.edit', compact('library', 'categories'));
     }
 
     public function update(Request $request, LibraryItem $library)
     {
+        $this->authorize('update', $library);
+
         $data = $request->validate([
             'title'            => 'required|string|max:255',
             'category'         => 'required|in:' . implode(',', array_keys(LibraryItem::categories())),
@@ -99,14 +112,16 @@ class LibraryItemsController extends Controller
 
     public function destroy(LibraryItem $library)
     {
-        abort_unless(auth()->user()->hasAnyRole(['coordinator', 'planning_officer']), 403);
+        $this->authorize('delete', $library);
+
         $library->delete();
         return redirect()->route('library.index')->with('success', 'Library item removed.');
     }
 
     public function toggleApproval(LibraryItem $library)
     {
-        abort_unless(auth()->user()->hasRole('coordinator'), 403);
+        $this->authorize('approve', $library);
+
         $library->update(['is_approved' => !$library->is_approved, 'updated_by' => auth()->id()]);
         $state = $library->is_approved ? 'published' : 'unpublished';
         return back()->with('success', "Item {$state}.");
@@ -114,6 +129,8 @@ class LibraryItemsController extends Controller
 
     public function copy(LibraryItem $library)
     {
+        $this->authorize('view', $library);
+
         $library->incrementUseCount();
         return response()->json(['content' => $library->content, 'title' => $library->title]);
     }

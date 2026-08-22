@@ -60,7 +60,7 @@
                 @foreach($documents as $doc)
                 <tr>
                     <td>
-                        <a href="{{ Storage::url($doc->file_path) }}" target="_blank">
+                        <a href="{{ route('documents.show', $doc) }}" target="_blank">
                             <i class="fas fa-file mr-1 text-muted"></i>{{ $doc->title }}
                         </a>
                         @if($doc->description)
@@ -79,7 +79,7 @@
                         @endif
                     </td>
                     <td>
-                        <a href="{{ Storage::url($doc->file_path) }}" target="_blank"
+                        <a href="{{ route('documents.show', $doc) }}" target="_blank"
                            class="btn btn-xs btn-outline-primary" title="Download">
                             <i class="fas fa-download"></i>
                         </a>

@@ -77,7 +77,7 @@
                 <div class="form-group">
                     <label>Replace File</label>
                     <p>
-                        <a href="{{ Storage::url($donorPolicy->file_path) }}" target="_blank" class="btn btn-sm btn-outline-info">
+                        <a href="{{ route('donor-policies.show', $donorPolicy) }}" target="_blank" class="btn btn-sm btn-outline-info">
                             <i class="fas fa-download mr-1"></i>{{ $donorPolicy->file_name }}
                         </a>
                     </p>

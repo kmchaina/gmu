@@ -33,28 +33,37 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('role:coordinator,planning_officer,finance_officer');
 
     Route::resource('calls', CallsController::class);
+    Route::get('calls/{call}/document',       [CallsController::class, 'downloadDocument'])->name('calls.document');
     Route::post('calls/{call}/interest',     [CallsController::class, 'expressInterest'])->name('calls.interest');
     Route::post('calls/{call}/select-team',  [CallsController::class, 'selectTeam'])->name('calls.select-team');
     Route::resource('proposals', ProposalsController::class);
     Route::post('proposals/{proposal}/review', [ProposalsController::class, 'submitReview'])->name('proposals.review');
     Route::resource('awards', AwardsController::class);
+    Route::get('awards/{award}/contract',     [AwardsController::class, 'downloadContract'])->name('awards.contract');
 
-    // Award sub-resources
-    Route::post('awards/{award}/budgets',              [AwardBudgetsController::class, 'store'])->name('awards.budgets.store');
-    Route::delete('awards/{award}/budgets/{budget}',   [AwardBudgetsController::class, 'destroy'])->name('awards.budgets.destroy');
+    // Award sub-resources. scopeBindings() makes Laravel resolve each child
+    // through its parent award, so a budget line belonging to another award
+    // cannot be reached through this one (finding H5).
+    Route::scopeBindings()->group(function () {
+        Route::post('awards/{award}/budgets',              [AwardBudgetsController::class, 'store'])->name('awards.budgets.store');
+        Route::delete('awards/{award}/budgets/{budget}',   [AwardBudgetsController::class, 'destroy'])->name('awards.budgets.destroy');
 
-    Route::post('awards/{award}/compliance',           [ComplianceCalendarController::class, 'store'])->name('awards.compliance.store');
-    Route::patch('awards/{award}/compliance/{item}',   [ComplianceCalendarController::class, 'update'])->name('awards.compliance.update');
-    Route::delete('awards/{award}/compliance/{item}',  [ComplianceCalendarController::class, 'destroy'])->name('awards.compliance.destroy');
+        Route::post('awards/{award}/compliance',           [ComplianceCalendarController::class, 'store'])->name('awards.compliance.store');
+        Route::patch('awards/{award}/compliance/{item}',   [ComplianceCalendarController::class, 'update'])->name('awards.compliance.update');
+        Route::delete('awards/{award}/compliance/{item}',  [ComplianceCalendarController::class, 'destroy'])->name('awards.compliance.destroy');
 
-    Route::post('awards/{award}/monitoring',           [MonitoringVisitsController::class, 'store'])->name('awards.monitoring.store');
-    Route::delete('awards/{award}/monitoring/{visit}', [MonitoringVisitsController::class, 'destroy'])->name('awards.monitoring.destroy');
+        Route::post('awards/{award}/monitoring',           [MonitoringVisitsController::class, 'store'])->name('awards.monitoring.store');
+        Route::get('awards/{award}/monitoring/{visit}/report', [MonitoringVisitsController::class, 'downloadReport'])->name('awards.monitoring.report');
+        Route::delete('awards/{award}/monitoring/{visit}', [MonitoringVisitsController::class, 'destroy'])->name('awards.monitoring.destroy');
 
-    Route::post('awards/{award}/ethics',               [EthicsRenewalsController::class, 'store'])->name('awards.ethics.store');
-    Route::patch('awards/{award}/ethics/{renewal}',    [EthicsRenewalsController::class, 'update'])->name('awards.ethics.update');
-    Route::delete('awards/{award}/ethics/{renewal}',   [EthicsRenewalsController::class, 'destroy'])->name('awards.ethics.destroy');
+        Route::post('awards/{award}/ethics',               [EthicsRenewalsController::class, 'store'])->name('awards.ethics.store');
+        Route::patch('awards/{award}/ethics/{renewal}',    [EthicsRenewalsController::class, 'update'])->name('awards.ethics.update');
+        Route::get('awards/{award}/ethics/{renewal}/certificate', [EthicsRenewalsController::class, 'downloadCertificate'])->name('awards.ethics.certificate');
+        Route::delete('awards/{award}/ethics/{renewal}',   [EthicsRenewalsController::class, 'destroy'])->name('awards.ethics.destroy');
+    });
 
     Route::resource('reports', ReportsController::class);
+    Route::get('reports/{report}/file',       [ReportsController::class, 'download'])->name('reports.download');
     Route::resource('documents', DocumentsController::class);
     Route::resource('donor-policies', DonorPoliciesController::class);
     Route::get('/notifications', [NotificationsController::class, 'index'])->name('notifications.index');
