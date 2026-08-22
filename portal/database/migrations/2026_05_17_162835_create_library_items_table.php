@@ -36,7 +36,11 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->fullText(['title', 'content']); // MySQL FULLTEXT for search
+            // MySQL FULLTEXT for search. SQLite (used by the test suite) has no
+            // equivalent, so the index is created only where it is supported.
+            if (in_array(Schema::getConnection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+                $table->fullText(['title', 'content']);
+            }
         });
     }
 
