@@ -1,11 +1,12 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', 'Add Library Item')
-
-@section('content_header')
-    <h1><i class="fas fa-plus-circle mr-2"></i>Add Content Block</h1>
-@endsection
+@section('title', 'Add a library block')
+@section('crumb', 'Proposal library')
 
 @section('content')
+<x-ui.page-head
+    title="Add a library block"
+    lede="Institutional text that every proposal needs — written once, approved, and reused." />
+
 @include('library._form', ['item' => null, 'categories' => $categories, 'route' => route('library.store'), 'method' => 'POST'])
 @endsection

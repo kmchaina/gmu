@@ -1,112 +1,64 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', 'Upload Policy')
-
-@section('content_header')
-    <div class="d-flex justify-content-between align-items-center">
-        <h1><i class="fas fa-upload mr-2"></i>Upload Donor Policy</h1>
-        <a href="{{ route('donor-policies.index') }}" class="btn btn-default"><i class="fas fa-arrow-left mr-1"></i>Back</a>
-    </div>
-@endsection
+@section('title', 'Upload donor guidance')
+@section('crumb', 'Library')
 
 @section('content')
+<x-ui.page-head
+    title="Upload donor guidance"
+    lede="Guidelines, reporting and budget templates — what a PI needs before writing, and the GMU needs before reviewing." />
 
-<form action="{{ route('donor-policies.store') }}" method="POST" enctype="multipart/form-data">
-@csrf
+<form method="POST" action="{{ route('donor-policies.store') }}" enctype="multipart/form-data">
+    @csrf
 
-<div class="row">
-    <div class="col-md-8">
-        <div class="card card-outline card-primary">
-            <div class="card-header"><h3 class="card-title">Policy Details</h3></div>
-            <div class="card-body">
-
-                <div class="form-group">
-                    <label>Donor <span class="text-danger">*</span></label>
-                    <select name="donor_id" class="form-control select2 @error('donor_id') is-invalid @enderror">
-                        <option value="">-- Select Donor --</option>
+    <div class="grid grid-wide">
+        <x-ui.card title="The document">
+            <div class="form-grid">
+                <x-ui.field label="Donor" name="donor_id" required>
+                    <select name="donor_id" class="select" required>
+                        <option value="">Choose a donor…</option>
                         @foreach($donors as $donor)
-                            <option value="{{ $donor->id }}"
-                                {{ old('donor_id', $selectedDonor?->id) == $donor->id ? 'selected' : '' }}>
-                                {{ $donor->name }} @if($donor->acronym)({{ $donor->acronym }})@endif
-                            </option>
+                            <option value="{{ $donor->id }}" @selected(old('donor_id', $selectedDonor?->id) == $donor->id)>{{ $donor->name }}</option>
                         @endforeach
                     </select>
-                    @error('donor_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                </div>
+                </x-ui.field>
 
-                <div class="form-group">
-                    <label>Title <span class="text-danger">*</span></label>
-                    <input type="text" name="title" value="{{ old('title') }}"
-                           class="form-control @error('title') is-invalid @enderror"
-                           placeholder="e.g. NIH Grants Policy Statement 2025">
-                    @error('title')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                </div>
+                <x-ui.field label="Type" name="policy_type" required>
+                    <select name="policy_type" class="select" required>
+                        @foreach(['grant_guidelines' => 'Grant guidelines', 'reporting_template' => 'Reporting template', 'budget_template' => 'Budget template', 'compliance_policy' => 'Compliance policy', 'other' => 'Other'] as $value => $label)
+                            <option value="{{ $value }}" @selected(old('policy_type') === $value)>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </x-ui.field>
 
-                <div class="row">
-                    <div class="col-md-5">
-                        <div class="form-group">
-                            <label>Policy Type <span class="text-danger">*</span></label>
-                            <select name="policy_type" class="form-control @error('policy_type') is-invalid @enderror">
-                                <option value="">-- Select Type --</option>
-                                <option value="grant_guidelines"   {{ old('policy_type') === 'grant_guidelines'   ? 'selected' : '' }}>Grant Guidelines</option>
-                                <option value="reporting_template" {{ old('policy_type') === 'reporting_template' ? 'selected' : '' }}>Reporting Template</option>
-                                <option value="budget_template"    {{ old('policy_type') === 'budget_template'    ? 'selected' : '' }}>Budget Template</option>
-                                <option value="compliance_policy"  {{ old('policy_type') === 'compliance_policy'  ? 'selected' : '' }}>Compliance Policy</option>
-                                <option value="other"              {{ old('policy_type') === 'other'              ? 'selected' : '' }}>Other</option>
-                            </select>
-                            @error('policy_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label>Version</label>
-                            <input type="number" name="version" value="{{ old('version', 1) }}" class="form-control" min="1">
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label>Effective Date</label>
-                            <input type="date" name="effective_date" value="{{ old('effective_date') }}" class="form-control">
-                        </div>
-                    </div>
-                </div>
+                <x-ui.field label="Title" name="title" required wide>
+                    <input name="title" class="input" value="{{ old('title') }}" required maxlength="255">
+                </x-ui.field>
 
-                <div class="form-group">
-                    <label>Notes</label>
-                    <textarea name="notes" rows="3" class="form-control" placeholder="Any notes about this document...">{{ old('notes') }}</textarea>
-                </div>
+                <x-ui.field label="Version" name="version" required>
+                    <input type="number" name="version" min="1" class="input" value="{{ old('version', 1) }}" required>
+                </x-ui.field>
 
-                <div class="form-group">
-                    <label>File <span class="text-danger">*</span></label>
-                    <div class="custom-file">
-                        <input type="file" name="file" class="custom-file-input @error('file') is-invalid @enderror"
-                               id="policyFile" accept=".pdf,.doc,.docx,.xlsx">
-                        <label class="custom-file-label" for="policyFile">Choose file (PDF/Word/Excel)</label>
-                    </div>
-                    @error('file')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
-                    <small class="text-muted">Max 20MB</small>
-                </div>
+                <x-ui.field label="Effective from" name="effective_date">
+                    <input type="date" name="effective_date" class="input" value="{{ old('effective_date') }}">
+                </x-ui.field>
 
+                <x-ui.field label="Notes" name="notes" wide help="What changed in this version, or what to watch for">
+                    <textarea name="notes" rows="3" class="textarea">{{ old('notes') }}</textarea>
+                </x-ui.field>
+
+                <x-ui.field label="File" name="file" required wide help="PDF, Word or Excel, up to 20 MB">
+                    <input type="file" name="file" class="input" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv" required>
+                </x-ui.field>
             </div>
-        </div>
-    </div>
+        </x-ui.card>
 
-    <div class="col-md-4">
-        <button type="submit" class="btn btn-primary btn-block btn-lg">
-            <i class="fas fa-upload mr-1"></i> Upload Policy
-        </button>
-        <a href="{{ route('donor-policies.index') }}" class="btn btn-default btn-block">Cancel</a>
+        <x-ui.card>
+            <div class="form-actions">
+                <button class="btn btn-primary"><i class="fas fa-upload"></i> Upload</button>
+                <a href="{{ route('donor-policies.index') }}" class="btn">Cancel</a>
+            </div>
+        </x-ui.card>
     </div>
-</div>
-
 </form>
-
-@endsection
-
-@section('js')
-<script>
-document.querySelector('#policyFile')?.addEventListener('change', function(){
-    this.nextElementSibling.textContent = this.files[0]?.name || 'Choose file';
-});
-</script>
 @endsection

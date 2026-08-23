@@ -1,166 +1,120 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', 'Edit Report')
-
-@section('content_header')
-    <div class="d-flex justify-content-between align-items-center">
-        <h1><i class="fas fa-edit mr-2"></i>Edit Report</h1>
-        <a href="{{ route('reports.show', $report) }}" class="btn btn-default"><i class="fas fa-arrow-left mr-1"></i>Back</a>
-    </div>
-@endsection
+@section('title', 'Update report')
+@section('crumb', 'Awards & compliance')
 
 @section('content')
+@php $canVerify = auth()->user()->can('verify', $report); @endphp
 
-<form action="{{ route('reports.update', $report) }}" method="POST" enctype="multipart/form-data">
-@csrf
-@method('PUT')
+<x-ui.page-head title="Update report" :lede="$report->title . ' · ' . $report->award?->contract_number">
+    <x-slot:actions>
+        <a href="{{ route('reports.show', $report) }}" class="btn">View report</a>
+    </x-slot:actions>
+</x-ui.page-head>
 
-<div class="row">
-    <div class="col-md-8">
+<form method="POST" action="{{ route('reports.update', $report) }}" enctype="multipart/form-data">
+    @csrf @method('PUT')
 
-        <div class="card card-outline card-info">
-            <div class="card-header"><h3 class="card-title">Report Details</h3></div>
-            <div class="card-body">
+    <div class="grid grid-wide">
+        <div class="stack">
+            <x-ui.card title="The report">
+                <div class="form-grid">
+                    <x-ui.field label="Title" name="title" required wide>
+                        <input name="title" class="input" value="{{ old('title', $report->title) }}" required maxlength="255">
+                    </x-ui.field>
 
-                <div class="form-group">
-                    <label class="text-muted">Award</label>
-                    <p class="form-control-plaintext">
-                        <a href="{{ route('awards.show', $report->award) }}">{{ $report->award->title }}</a>
-                        — {{ $report->award->donor->name }}
-                    </p>
-                    <input type="hidden" name="award_id" value="{{ $report->award_id }}">
-                </div>
+                    <x-ui.field label="Type" name="report_type" required>
+                        <select name="report_type" class="select" required>
+                            @foreach(['technical' => 'Technical', 'financial' => 'Financial', 'combined' => 'Combined'] as $value => $label)
+                                <option value="{{ $value }}" @selected(old('report_type', $report->report_type) === $value)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </x-ui.field>
 
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label>Report Type</label>
-                            <select name="report_type" class="form-control">
-                                <option value="technical" {{ old('report_type', $report->report_type) === 'technical' ? 'selected' : '' }}>Technical</option>
-                                <option value="financial" {{ old('report_type', $report->report_type) === 'financial' ? 'selected' : '' }}>Financial</option>
-                                <option value="combined"  {{ old('report_type', $report->report_type) === 'combined'  ? 'selected' : '' }}>Combined</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label>Status</label>
-                            <select name="status" class="form-control">
-                                <option value="pending"     {{ old('status', $report->status) === 'pending'     ? 'selected' : '' }}>Pending</option>
-                                <option value="submitted"   {{ old('status', $report->status) === 'submitted'   ? 'selected' : '' }}>Submitted</option>
-                                <option value="under_review"{{ old('status', $report->status) === 'under_review'? 'selected' : '' }}>Under Review</option>
-                                <option value="approved"    {{ old('status', $report->status) === 'approved'    ? 'selected' : '' }}>Approved</option>
-                                <option value="rejected"    {{ old('status', $report->status) === 'rejected'    ? 'selected' : '' }}>Rejected</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
+                    <x-ui.field label="Due date" name="due_date" required>
+                        <input type="date" name="due_date" class="input" value="{{ old('due_date', $report->due_date?->toDateString()) }}" required>
+                    </x-ui.field>
 
-                <div class="form-group">
-                    <label>Report Title <span class="text-danger">*</span></label>
-                    <input type="text" name="title" value="{{ old('title', $report->title) }}"
-                           class="form-control @error('title') is-invalid @enderror">
-                    @error('title')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                </div>
+                    <x-ui.field label="Period start" name="period_start">
+                        <input type="date" name="period_start" class="input" value="{{ old('period_start', $report->period_start?->toDateString()) }}">
+                    </x-ui.field>
 
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label>Period Start</label>
-                            <input type="date" name="period_start"
-                                   value="{{ old('period_start', $report->period_start?->format('Y-m-d')) }}"
-                                   class="form-control">
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label>Period End</label>
-                            <input type="date" name="period_end"
-                                   value="{{ old('period_end', $report->period_end?->format('Y-m-d')) }}"
-                                   class="form-control">
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label>Due Date <span class="text-danger">*</span></label>
-                            <input type="date" name="due_date"
-                                   value="{{ old('due_date', $report->due_date->format('Y-m-d')) }}"
-                                   class="form-control @error('due_date') is-invalid @enderror">
-                            @error('due_date')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                    </div>
-                </div>
+                    <x-ui.field label="Period end" name="period_end">
+                        <input type="date" name="period_end" class="input" value="{{ old('period_end', $report->period_end?->toDateString()) }}">
+                    </x-ui.field>
 
-                <div class="form-group">
-                    <label>Sent to donor on</label>
-                    <input type="date" name="sent_to_donor_on" class="form-control"
-                           value="{{ old('sent_to_donor_on', $report->sent_to_donor_on?->toDateString()) }}">
-                    <small class="form-text text-muted">
-                        The date the report actually went to the donor — separate from internal approval.
-                    </small>
-                </div>
-
-                <div class="form-group">
-                    <label>Donor acknowledgement</label>
-                    <input type="text" name="donor_acknowledgement" class="form-control"
-                           placeholder="Reference or confirmation from the donor"
-                           value="{{ old('donor_acknowledgement', $report->donor_acknowledgement) }}">
-                </div>
-
-                <div class="form-group">
-                    <label>GMU Comments</label>
-                    <textarea name="gmu_comments" rows="3" class="form-control">{{ old('gmu_comments', $report->gmu_comments) }}</textarea>
-                </div>
-
-                <div class="form-group">
-                    <label>Replace Report File</label>
-                    @if($report->file_path)
-                        <div class="mb-2">
-                            <a href="{{ route('reports.download', $report) }}" target="_blank" class="btn btn-sm btn-outline-info">
-                                <i class="fas fa-download mr-1"></i>Current File
+                    <x-ui.field label="Replace file" name="file_path" wide>
+                        @if($report->file_path)
+                            <a href="{{ route('reports.download', $report) }}" class="btn btn-sm" style="margin-bottom:8px;">
+                                <i class="fas fa-file"></i> Current file
                             </a>
-                        </div>
-                    @endif
-                    <div class="custom-file">
-                        <input type="file" name="file_path" class="custom-file-input" id="reportFile"
-                               accept=".pdf,.doc,.docx,.xlsx">
-                        <label class="custom-file-label" for="reportFile">Choose file</label>
-                    </div>
+                        @endif
+                        <input type="file" name="file_path" class="input" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv">
+                    </x-ui.field>
                 </div>
+            </x-ui.card>
 
-            </div>
+            <x-ui.card title="GMU review">
+                <x-ui.field label="Comments" name="gmu_comments" help="If you are returning the report, say what needs to change">
+                    <textarea name="gmu_comments" rows="4" class="textarea">{{ old('gmu_comments', $report->gmu_comments) }}</textarea>
+                </x-ui.field>
+            </x-ui.card>
         </div>
 
+        <div class="stack">
+            <x-ui.card title="Status">
+                <x-ui.field label="Status" name="status" required>
+                    <select name="status" class="select" required>
+                        @foreach(['pending' => 'Pending', 'submitted' => 'Submitted', 'under_review' => 'Under review', 'rejected' => 'Returned to the team'] as $value => $label)
+                            <option value="{{ $value }}" @selected(old('status', $report->status) === $value)>{{ $label }}</option>
+                        @endforeach
+                        @if($canVerify || $report->status === 'approved')
+                            <option value="approved" @selected(old('status', $report->status) === 'approved')>Approved — cleared for the donor</option>
+                        @endif
+                    </select>
+                </x-ui.field>
+
+                @unless($canVerify)
+                    <p class="small muted" style="margin-top:10px; line-height:1.65;">
+                        Approving a report is a second pair of eyes: it is done by the Coordinator or Finance Officer,
+                        and never by whoever submitted it.
+                    </p>
+                @endunless
+            </x-ui.card>
+
+            <x-ui.card title="Submission to the donor" note="Separate from internal approval">
+                <div class="stack-sm">
+                    <x-ui.field label="Sent to donor on" name="sent_to_donor_on"
+                                help="The date it actually went out">
+                        <input type="date" name="sent_to_donor_on" class="input"
+                               value="{{ old('sent_to_donor_on', $report->sent_to_donor_on?->toDateString()) }}">
+                    </x-ui.field>
+
+                    <x-ui.field label="Donor acknowledgement" name="donor_acknowledgement">
+                        <input name="donor_acknowledgement" class="input"
+                               value="{{ old('donor_acknowledgement', $report->donor_acknowledgement) }}"
+                               placeholder="Reference or confirmation">
+                    </x-ui.field>
+                </div>
+            </x-ui.card>
+
+            <x-ui.card>
+                <div class="form-actions">
+                    <button class="btn btn-primary">Save changes</button>
+                    <a href="{{ route('reports.show', $report) }}" class="btn">Cancel</a>
+                </div>
+            </x-ui.card>
+
+            @can('delete', $report)
+                <x-ui.card title="Remove this report" accent="danger">
+                    <form method="POST" action="{{ route('reports.destroy', $report) }}"
+                          onsubmit="return confirm('Remove this report?')">
+                        @csrf @method('DELETE')
+                        <button class="btn btn-danger btn-block">Remove report</button>
+                    </form>
+                </x-ui.card>
+            @endcan
+        </div>
     </div>
-
-    <div class="col-md-4">
-
-        <button type="submit" class="btn btn-primary btn-block btn-lg">
-            <i class="fas fa-save mr-1"></i> Save Changes
-        </button>
-        <a href="{{ route('reports.show', $report) }}" class="btn btn-default btn-block">Cancel</a>
-
-        <hr>
-        <form action="{{ route('reports.destroy', $report) }}" method="POST"
-              onsubmit="return confirm('Delete this report?')">
-            @csrf
-            @method('DELETE')
-            <button type="submit" class="btn btn-outline-danger btn-block btn-sm">
-                <i class="fas fa-trash mr-1"></i>Delete Report
-            </button>
-        </form>
-
-    </div>
-</div>
-
 </form>
-
-@endsection
-
-@section('js')
-<script>
-document.querySelector('#reportFile')?.addEventListener('change', function(){
-    this.nextElementSibling.textContent = this.files[0]?.name || 'Choose file';
-});
-</script>
 @endsection

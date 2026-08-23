@@ -1,106 +1,88 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', 'Edit Document')
-
-@section('content_header')
-    <div class="d-flex justify-content-between align-items-center">
-        <h1><i class="fas fa-edit mr-2"></i>Edit Document</h1>
-        <a href="{{ route('documents.index') }}" class="btn btn-default"><i class="fas fa-arrow-left mr-1"></i>Back</a>
-    </div>
-@endsection
+@section('title', 'Edit document')
+@section('crumb', 'Library')
 
 @section('content')
+<x-ui.page-head title="Edit document" :lede="$document->title">
+    <x-slot:actions>
+        <a href="{{ route('documents.show', $document) }}" class="btn"><i class="fas fa-download"></i> Download</a>
+    </x-slot:actions>
+</x-ui.page-head>
 
-<form action="{{ route('documents.update', $document) }}" method="POST">
-@csrf
-@method('PUT')
+<form method="POST" action="{{ route('documents.update', $document) }}">
+    @csrf @method('PUT')
 
-<div class="row">
-    <div class="col-md-8">
-        <div class="card card-outline card-primary">
-            <div class="card-header"><h3 class="card-title">Document Details</h3></div>
-            <div class="card-body">
+    <div class="grid grid-wide">
+        <x-ui.card title="The document">
+            <div class="form-grid">
+                <x-ui.field label="Title" name="title" required wide>
+                    <input name="title" class="input" value="{{ old('title', $document->title) }}" required maxlength="255">
+                </x-ui.field>
 
-                <div class="form-group">
-                    <label>Title <span class="text-danger">*</span></label>
-                    <input type="text" name="title" value="{{ old('title', $document->title) }}"
-                           class="form-control @error('title') is-invalid @enderror">
-                    @error('title')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                </div>
+                <x-ui.field label="Category" name="category" required>
+                    <select name="category" class="select" required>
+                        @foreach(['sop' => 'SOP', 'template' => 'Template', 'policy' => 'Policy', 'contract' => 'Contract', 'report' => 'Report', 'audit' => 'Audit evidence', 'other' => 'Other'] as $value => $label)
+                            <option value="{{ $value }}" @selected(old('category', $document->category) === $value)>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </x-ui.field>
 
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label>Category</label>
-                            <select name="category" class="form-control">
-                                <option value="sop"      {{ old('category', $document->category) === 'sop'      ? 'selected' : '' }}>SOP</option>
-                                <option value="template" {{ old('category', $document->category) === 'template' ? 'selected' : '' }}>Template</option>
-                                <option value="policy"   {{ old('category', $document->category) === 'policy'   ? 'selected' : '' }}>Policy</option>
-                                <option value="contract" {{ old('category', $document->category) === 'contract' ? 'selected' : '' }}>Contract</option>
-                                <option value="report"   {{ old('category', $document->category) === 'report'   ? 'selected' : '' }}>Report</option>
-                                <option value="audit"    {{ old('category', $document->category) === 'audit'    ? 'selected' : '' }}>Audit</option>
-                                <option value="other"    {{ old('category', $document->category) === 'other'    ? 'selected' : '' }}>Other</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label>Version</label>
-                            <input type="number" name="version" value="{{ old('version', $document->version) }}"
-                                   class="form-control" min="1" max="99">
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label>Access</label>
-                            <div class="mt-2">
-                                <div class="custom-control custom-switch">
-                                    <input type="checkbox" name="is_public" value="1" class="custom-control-input"
-                                           id="isPublic" {{ old('is_public', $document->is_public) ? 'checked' : '' }}>
-                                    <label class="custom-control-label" for="isPublic">Public</label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <x-ui.field label="Version" name="version" required>
+                    <input type="number" name="version" min="1" class="input" value="{{ old('version', $document->version) }}" required>
+                </x-ui.field>
 
-                <div class="form-group">
-                    <label>Description</label>
-                    <textarea name="description" rows="3" class="form-control">{{ old('description', $document->description) }}</textarea>
-                </div>
+                <x-ui.field label="Retention (years)" name="retention_years"
+                            help="Leave as is to keep the default for this category">
+                    <input type="number" name="retention_years" min="1" max="50" class="input"
+                           value="{{ old('retention_years', $document->retention_years) }}">
+                </x-ui.field>
 
-                <div class="form-group">
-                    <label>Current File</label>
-                    <p>
-                        <a href="{{ route('documents.show', $document) }}" target="_blank" class="btn btn-sm btn-outline-info">
-                            <i class="fas fa-download mr-1"></i>{{ $document->file_name }} (v{{ $document->version }})
-                        </a>
-                    </p>
-                    <small class="text-muted">To replace the file, upload a new version.</small>
-                </div>
-
+                <x-ui.field label="Description" name="description" wide>
+                    <textarea name="description" rows="3" class="textarea">{{ old('description', $document->description) }}</textarea>
+                </x-ui.field>
             </div>
+        </x-ui.card>
+
+        <div class="stack">
+            <x-ui.card title="Who may see it">
+                <label class="check">
+                    <input type="checkbox" name="is_public" value="1" @checked(old('is_public', $document->is_public))>
+                    <span>Any member of staff may open this</span>
+                </label>
+            </x-ui.card>
+
+            <x-ui.card title="File on record">
+                <div class="stack-sm small">
+                    <div class="row-between"><span class="muted">Name</span><span>{{ $document->file_name }}</span></div>
+                    <div class="row-between"><span class="muted">Size</span><span class="mono">{{ number_format(($document->file_size ?? 0) / 1024, 0) }} KB</span></div>
+                    <div class="row-between"><span class="muted">Uploaded</span><span>{{ $document->created_at?->format('d M Y') }}</span></div>
+                    <div class="row-between"><span class="muted">Retain until</span>
+                        <span class="{{ $document->isDueForReview() ? 'text-warn' : '' }}">{{ $document->retain_until?->format('M Y') ?? '—' }}</span></div>
+                </div>
+                <p class="small muted-3" style="margin-top:12px;">
+                    To replace the file itself, upload a new version and raise the version number.
+                </p>
+            </x-ui.card>
+
+            <x-ui.card>
+                <div class="form-actions">
+                    <button class="btn btn-primary">Save changes</button>
+                    <a href="{{ route('documents.index') }}" class="btn">Cancel</a>
+                </div>
+            </x-ui.card>
+
+            @can('delete', $document)
+                <x-ui.card title="Remove this document" accent="danger">
+                    <p class="small muted">The record is soft-deleted and the file is removed from storage.</p>
+                    <form method="POST" action="{{ route('documents.destroy', $document) }}"
+                          onsubmit="return confirm('Remove this document and its file?')" style="margin-top:12px;">
+                        @csrf @method('DELETE')
+                        <button class="btn btn-danger btn-block">Remove document</button>
+                    </form>
+                </x-ui.card>
+            @endcan
         </div>
     </div>
-
-    <div class="col-md-4">
-        <button type="submit" class="btn btn-primary btn-block btn-lg">
-            <i class="fas fa-save mr-1"></i> Save Changes
-        </button>
-        <a href="{{ route('documents.index') }}" class="btn btn-default btn-block">Cancel</a>
-
-        <hr>
-        <form action="{{ route('documents.destroy', $document) }}" method="POST"
-              onsubmit="return confirm('Delete this document?')">
-            @csrf
-            @method('DELETE')
-            <button type="submit" class="btn btn-outline-danger btn-block btn-sm">
-                <i class="fas fa-trash mr-1"></i>Delete Document
-            </button>
-        </form>
-    </div>
-</div>
-
 </form>
-
 @endsection

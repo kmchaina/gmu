@@ -1,147 +1,99 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', 'Edit User')
-
-@section('content_header')
-    <div class="d-flex justify-content-between align-items-center">
-        <h1><i class="fas fa-user-edit mr-2"></i>Edit User</h1>
-        <a href="{{ route('admin.users.show', $user) }}" class="btn btn-default"><i class="fas fa-arrow-left mr-1"></i>Back</a>
-    </div>
-@endsection
+@section('title', 'Edit account')
+@section('crumb', 'Administration')
 
 @section('content')
+<x-ui.page-head title="Edit account" :lede="$user->name . ' · ' . $user->email">
+    <x-slot:actions>
+        <a href="{{ route('admin.users.show', $user) }}" class="btn">View account</a>
+    </x-slot:actions>
+</x-ui.page-head>
 
-<form action="{{ route('admin.users.update', $user) }}" method="POST">
-@csrf
-@method('PUT')
+<form method="POST" action="{{ route('admin.users.update', $user) }}">
+    @csrf @method('PUT')
 
-<div class="row">
-    <div class="col-md-8">
+    <div class="grid grid-wide">
+        <x-ui.card title="The person">
+            <div class="form-grid">
+                <x-ui.field label="Full name" name="name" required wide>
+                    <input name="name" class="input" value="{{ old('name', $user->name) }}" required maxlength="255">
+                </x-ui.field>
 
-        <div class="card card-outline card-primary">
-            <div class="card-header"><h3 class="card-title">Account Details</h3></div>
-            <div class="card-body">
+                <x-ui.field label="Email" name="email" required>
+                    <input type="email" name="email" class="input" value="{{ old('email', $user->email) }}" required>
+                </x-ui.field>
 
-                <div class="form-group">
-                    <label>Full Name <span class="text-danger">*</span></label>
-                    <input type="text" name="name" value="{{ old('name', $user->name) }}"
-                           class="form-control @error('name') is-invalid @enderror">
-                    @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                </div>
+                <x-ui.field label="Role" name="role_id" required>
+                    <select name="role_id" class="select" required>
+                        @foreach($roles as $role)
+                            <option value="{{ $role->id }}" @selected(old('role_id', $user->role_id) == $role->id)>{{ $role->display_name }}</option>
+                        @endforeach
+                    </select>
+                </x-ui.field>
 
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label>Email Address <span class="text-danger">*</span></label>
-                            <input type="email" name="email" value="{{ old('email', $user->email) }}"
-                                   class="form-control @error('email') is-invalid @enderror">
-                            @error('email')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label>Role</label>
-                            <select name="role_id" class="form-control @error('role_id') is-invalid @enderror">
-                                <option value="">-- No role --</option>
-                                @foreach($roles as $role)
-                                    <option value="{{ $role->id }}" {{ old('role_id', $user->role_id) == $role->id ? 'selected' : '' }}>
-                                        {{ $role->display_name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            @error('role_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                    </div>
-                </div>
+                <x-ui.field label="Department" name="department">
+                    <input name="department" class="input" value="{{ old('department', $user->department) }}">
+                </x-ui.field>
 
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label>New Password <small class="text-muted">(leave blank to keep current)</small></label>
-                            <input type="password" name="password"
-                                   class="form-control @error('password') is-invalid @enderror" placeholder="Min 8 characters">
-                            @error('password')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label>Confirm New Password</label>
-                            <input type="password" name="password_confirmation" class="form-control">
-                        </div>
-                    </div>
-                </div>
+                <x-ui.field label="Research centre" name="research_center">
+                    <input name="research_center" class="input" value="{{ old('research_center', $user->research_center) }}">
+                </x-ui.field>
 
-                <hr>
-
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label>Phone</label>
-                            <input type="text" name="phone" value="{{ old('phone', $user->phone) }}"
-                                   class="form-control" placeholder="+255...">
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label>Department</label>
-                            <input type="text" name="department" value="{{ old('department', $user->department) }}"
-                                   class="form-control" placeholder="e.g. Epidemiology">
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label>Research Center</label>
-                            <input type="text" name="research_center" value="{{ old('research_center', $user->research_center) }}"
-                                   class="form-control" placeholder="e.g. HQ, Tanga">
-                        </div>
-                    </div>
-                </div>
-
+                <x-ui.field label="Phone" name="phone">
+                    <input name="phone" class="input" value="{{ old('phone', $user->phone) }}">
+                </x-ui.field>
             </div>
-        </div>
+        </x-ui.card>
 
-    </div>
+        <div class="stack">
+            <x-ui.card title="Reset the password">
+                <div class="stack-sm">
+                    <x-ui.field label="New password" name="password" help="Leave blank to keep the current one">
+                        <input type="password" name="password" class="input" minlength="8">
+                    </x-ui.field>
 
-    <div class="col-md-4">
-
-        <div class="card card-outline card-secondary">
-            <div class="card-header"><h3 class="card-title">Account Settings</h3></div>
-            <div class="card-body">
-                <div class="custom-control custom-switch">
-                    <input type="checkbox" name="is_active" value="1" class="custom-control-input"
-                           id="isActive" {{ old('is_active', $user->is_active) ? 'checked' : '' }}>
-                    <label class="custom-control-label" for="isActive">Account Active</label>
+                    <x-ui.field label="Confirm" name="password_confirmation">
+                        <input type="password" name="password_confirmation" class="input" minlength="8">
+                    </x-ui.field>
                 </div>
-                <small class="text-muted d-block mt-1">Inactive users cannot log in to the system.</small>
-
-                @if($user->id === auth()->id())
-                <div class="alert alert-warning mt-3 mb-0 small">
-                    <i class="fas fa-exclamation-triangle mr-1"></i>
-                    You are editing your own account. Be careful with role and status changes.
-                </div>
-                @endif
-            </div>
-        </div>
-
-        <div class="card bg-light">
-            <div class="card-body">
-                <p class="small text-muted mb-1">
-                    <i class="fas fa-clock mr-1"></i>Account created {{ $user->created_at->format('d M Y') }}
+                <p class="small muted" style="margin-top:12px; line-height:1.7;">
+                    Setting a password here holds the account at the profile page until the person chooses their own.
                 </p>
-                <p class="small text-muted mb-0">
-                    <i class="fas fa-sign-in-alt mr-1"></i>Last updated {{ $user->updated_at->diffForHumans() }}
+            </x-ui.card>
+
+            <x-ui.card title="Access" :accent="$user->is_active ? null : 'danger'">
+                <label class="check">
+                    <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $user->is_active))>
+                    <span>Account is active</span>
+                </label>
+                <p class="small muted" style="margin-top:12px; line-height:1.7;">
+                    Deactivating takes effect immediately: the person cannot sign in, and any open session ends on
+                    their next click. Their records stay exactly as they are.
                 </p>
-            </div>
+            </x-ui.card>
+
+            <x-ui.card>
+                <div class="form-actions">
+                    <button class="btn btn-primary">Save changes</button>
+                    <a href="{{ route('admin.users.index') }}" class="btn">Cancel</a>
+                </div>
+            </x-ui.card>
+
+            @if($user->id !== auth()->id())
+                <x-ui.card title="Deactivate this account" accent="danger">
+                    <p class="small muted" style="line-height:1.7;">
+                        Accounts are never deleted — grant records have to outlive the people who created them.
+                        This deactivates instead.
+                    </p>
+                    <form method="POST" action="{{ route('admin.users.destroy', $user) }}"
+                          onsubmit="return confirm('Deactivate this account?')" style="margin-top:12px;">
+                        @csrf @method('DELETE')
+                        <button class="btn btn-danger btn-block">Deactivate account</button>
+                    </form>
+                </x-ui.card>
+            @endif
         </div>
-
-        <button type="submit" class="btn btn-primary btn-block btn-lg">
-            <i class="fas fa-save mr-1"></i> Save Changes
-        </button>
-        <a href="{{ route('admin.users.show', $user) }}" class="btn btn-default btn-block">Cancel</a>
-
     </div>
-</div>
-
 </form>
-
 @endsection

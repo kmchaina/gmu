@@ -1,86 +1,80 @@
 <form method="POST" action="{{ $route }}">
     @csrf
-    @if($method === 'PUT') @method('PUT') @endif
+    @if($method !== 'POST')@method($method)@endif
 
-    @if($errors->any())
-        <div class="alert alert-danger">
-            <ul class="mb-0">@foreach($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul>
-        </div>
-    @endif
+    <div class="grid grid-wide">
+        <div class="stack">
+            <x-ui.card title="The text">
+                <div class="form-grid">
+                    <x-ui.field label="Title" name="title" required wide>
+                        <input name="title" class="input" value="{{ old('title', $item?->title) }}" required maxlength="255"
+                               placeholder="NIMR institutional capability statement">
+                    </x-ui.field>
 
-    <div class="card card-outline card-primary">
-        <div class="card-header"><h3 class="card-title">Content Block Details</h3></div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-8">
-                    <div class="form-group">
-                        <label>Title <span class="text-danger">*</span></label>
-                        <input type="text" name="title" class="form-control @error('title') is-invalid @enderror"
-                               value="{{ old('title', $item?->title) }}" placeholder="e.g. NIMR Institutional Capabilities Statement">
-                        @error('title')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
+                    <x-ui.field label="Content" name="content" required wide
+                                help="Write it as it would appear in a proposal — at least 20 characters">
+                        <textarea name="content" rows="14" class="textarea" required>{{ old('content', $item?->content) }}</textarea>
+                    </x-ui.field>
                 </div>
-                <div class="col-md-4">
-                    <div class="form-group">
-                        <label>Category <span class="text-danger">*</span></label>
-                        <select name="category" class="form-control @error('category') is-invalid @enderror">
-                            <option value="">— Select —</option>
-                            @foreach($categories as $key => $label)
-                                <option value="{{ $key }}" @selected(old('category', $item?->category) === $key)>{{ $label }}</option>
+            </x-ui.card>
+        </div>
+
+        <div class="stack">
+            <x-ui.card title="Classification">
+                <div class="stack-sm">
+                    <x-ui.field label="Category" name="category" required>
+                        <select name="category" class="select" required>
+                            @foreach($categories as $value => $label)
+                                <option value="{{ $value }}" @selected(old('category', $item?->category) === $value)>{{ $label }}</option>
                             @endforeach
                         </select>
-                        @error('category')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
-                </div>
-                <div class="col-md-8">
-                    <div class="form-group">
-                        <label>Funder Relevance <small class="text-muted">comma-separated, e.g. NIH, USAID, Wellcome</small></label>
-                        <input type="text" name="funder_relevance" class="form-control form-control-sm"
-                               value="{{ old('funder_relevance', $item?->funder_relevance) }}"
-                               placeholder="NIH, USAID, Wellcome, EU Horizon">
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="form-group">
-                        <label>Tags <small class="text-muted">comma-separated</small></label>
-                        <input type="text" name="tags" class="form-control form-control-sm"
-                               value="{{ old('tags', implode(', ', $item?->tags ?? [])) }}"
-                               placeholder="malaria, clinical, capacity">
-                    </div>
-                </div>
+                    </x-ui.field>
 
-                <div class="col-md-12">
-                    <div class="form-group">
-                        <label>Content <span class="text-danger">*</span>
-                            <small class="text-muted ml-2">The reusable text block researchers will copy into their proposals.</small>
-                        </label>
-                        <textarea name="content" rows="14"
-                                  class="form-control @error('content') is-invalid @enderror"
-                                  placeholder="Write the reusable content here…">{{ old('content', $item?->content) }}</textarea>
-                        @error('content')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
-                </div>
+                    <x-ui.field label="Relevant funders" name="funder_relevance" help="Comma separated, or leave blank for any">
+                        <input name="funder_relevance" class="input" value="{{ old('funder_relevance', $item?->funder_relevance) }}"
+                               placeholder="NIH,Wellcome,EDCTP">
+                    </x-ui.field>
 
-                <div class="col-md-12">
-                    <div class="form-group">
-                        <label>Usage Notes <small class="text-muted">When and how researchers should use this block.</small></label>
-                        <textarea name="usage_notes" rows="3"
-                                  class="form-control form-control-sm">{{ old('usage_notes', $item?->usage_notes) }}</textarea>
-                    </div>
+                    <x-ui.field label="Tags" name="tags" help="Comma separated, used by search">
+                        <input name="tags" class="input"
+                               value="{{ old('tags', $item?->tags ? implode(', ', $item->tags) : '') }}"
+                               placeholder="institutional, boilerplate">
+                    </x-ui.field>
+
+                    <x-ui.field label="When to use it" name="usage_notes"
+                                help="Guidance for whoever reaches for this next">
+                        <textarea name="usage_notes" rows="3" class="textarea">{{ old('usage_notes', $item?->usage_notes) }}</textarea>
+                    </x-ui.field>
                 </div>
-            </div>
-        </div>
-        <div class="card-footer">
-            <button type="submit" class="btn btn-primary">
-                <i class="fas fa-save mr-1"></i>{{ $item ? 'Update' : 'Save' }} Content Block
-            </button>
-            <a href="{{ route('library.index') }}" class="btn btn-secondary ml-2">Cancel</a>
-            @if($item && !$item->is_approved && auth()->user()->hasRole('coordinator'))
-                <form method="POST" action="{{ route('library.approve', $item) }}" class="d-inline ml-2">
-                    @csrf
-                    <button class="btn btn-success"><i class="fas fa-check mr-1"></i>Approve</button>
-                </form>
+            </x-ui.card>
+
+            @if($item && ! $item->is_approved)
+                <div class="alert alert-warn" style="margin:0;">
+                    <i class="fas fa-clock"></i>
+                    <span>This block is awaiting the Coordinator's approval before it circulates.</span>
+                </div>
             @endif
+
+            <x-ui.card>
+                <div class="form-actions">
+                    <button class="btn btn-primary">{{ $item ? 'Save changes' : 'Add to the library' }}</button>
+                    <a href="{{ $item ? route('library.show', $item) : route('library.index') }}" class="btn">Cancel</a>
+                </div>
+            </x-ui.card>
         </div>
     </div>
 </form>
+
+@if($item)
+    @can('delete', $item)
+        <div style="max-width:420px; margin-top:20px;">
+            <x-ui.card title="Remove this block" accent="danger">
+                <form method="POST" action="{{ route('library.destroy', $item) }}"
+                      onsubmit="return confirm('Remove this library block?')">
+                    @csrf @method('DELETE')
+                    <button class="btn btn-danger btn-block">Remove block</button>
+                </form>
+            </x-ui.card>
+        </div>
+    @endcan
+@endif

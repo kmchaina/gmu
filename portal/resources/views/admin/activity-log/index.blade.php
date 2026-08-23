@@ -1,130 +1,105 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', 'Audit Log')
-
-@section('content_header')
-    <h1><i class="fas fa-history mr-2"></i>Audit Log</h1>
-@endsection
+@section('title', 'Audit log')
+@section('crumb', 'Administration')
 
 @section('content')
-<div class="card card-outline card-primary">
-    <div class="card-header">
-        <h3 class="card-title">Activity History</h3>
-        <div class="card-tools">
-            <small class="text-muted">Showing {{ $logs->total() }} entries</small>
-        </div>
-    </div>
+<x-ui.page-head
+    title="Audit log"
+    :lede="number_format($logs->total()) . ' recorded ' . Str::plural('change', $logs->total()) . ' · who changed what, when, and from where'" />
 
-    {{-- Filters --}}
-    <div class="card-body border-bottom pb-3">
-        <form method="GET" action="{{ route('admin.activity-log.index') }}" class="row g-2">
-            <div class="col-md-3">
-                <select name="user_id" class="form-control form-control-sm">
-                    <option value="">All Users</option>
-                    @foreach($users as $u)
-                        <option value="{{ $u->id }}" @selected(request('user_id') == $u->id)>{{ $u->name }}</option>
+<div class="stack">
+
+    <x-ui.card title="Filter">
+        <form method="GET" class="form-grid">
+            <x-ui.field label="Person" name="user_id">
+                <select name="user_id" class="select">
+                    <option value="">Anyone</option>
+                    @foreach($users as $user)
+                        <option value="{{ $user->id }}" @selected(request('user_id') == $user->id)>{{ $user->name }}</option>
                     @endforeach
                 </select>
-            </div>
-            <div class="col-md-2">
-                <select name="model_type" class="form-control form-control-sm">
-                    <option value="">All Models</option>
-                    @foreach($modelTypes as $m)
-                        <option value="{{ $m }}" @selected(request('model_type') == $m)>{{ $m }}</option>
+            </x-ui.field>
+
+            <x-ui.field label="Record type" name="model_type">
+                <select name="model_type" class="select">
+                    <option value="">Anything</option>
+                    @foreach($modelTypes as $type)
+                        <option value="{{ $type }}" @selected(request('model_type') === $type)>{{ $type }}</option>
                     @endforeach
                 </select>
-            </div>
-            <div class="col-md-2">
-                <select name="action" class="form-control form-control-sm">
-                    <option value="">All Actions</option>
-                    @foreach($actions as $a)
-                        <option value="{{ $a }}" @selected(request('action') == $a)>{{ ucfirst($a) }}</option>
+            </x-ui.field>
+
+            <x-ui.field label="Action" name="action">
+                <select name="action" class="select">
+                    <option value="">Any action</option>
+                    @foreach($actions as $action)
+                        <option value="{{ $action }}" @selected(request('action') === $action)>{{ ucfirst($action) }}</option>
                     @endforeach
                 </select>
-            </div>
-            <div class="col-md-2">
-                <input type="date" name="date_from" class="form-control form-control-sm"
-                       value="{{ request('date_from') }}" placeholder="From">
-            </div>
-            <div class="col-md-2">
-                <input type="date" name="date_to" class="form-control form-control-sm"
-                       value="{{ request('date_to') }}" placeholder="To">
-            </div>
-            <div class="col-md-3 mt-2">
-                <div class="input-group input-group-sm">
-                    <input type="text" name="search" class="form-control"
-                           value="{{ request('search') }}" placeholder="Search description…">
-                    <div class="input-group-append">
-                        <button class="btn btn-primary" type="submit">Filter</button>
-                        <a href="{{ route('admin.activity-log.index') }}" class="btn btn-default">Reset</a>
-                    </div>
+            </x-ui.field>
+
+            <x-ui.field label="From" name="date_from">
+                <input type="date" name="date_from" class="input" value="{{ request('date_from') }}">
+            </x-ui.field>
+
+            <x-ui.field label="To" name="date_to">
+                <input type="date" name="date_to" class="input" value="{{ request('date_to') }}">
+            </x-ui.field>
+
+            <x-ui.field label="Search" name="search">
+                <input type="search" name="search" class="input" value="{{ request('search') }}" placeholder="Record or description">
+            </x-ui.field>
+
+            <div class="field wide">
+                <div class="form-actions">
+                    <button class="btn btn-primary">Apply filters</button>
+                    <a href="{{ route('admin.activity-log.index') }}" class="btn">Clear</a>
                 </div>
             </div>
         </form>
-    </div>
+    </x-ui.card>
 
-    <div class="card-body p-0">
-        <table class="table table-sm table-hover mb-0">
-            <thead class="thead-light">
-                <tr>
-                    <th style="width:160px">When</th>
-                    <th>User</th>
-                    <th>Action</th>
-                    <th>Record</th>
-                    <th>Description</th>
-                    <th style="width:60px"></th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($logs as $log)
-                <tr>
-                    <td class="text-muted small">{{ $log->created_at->format('d M Y H:i') }}</td>
-                    <td>
-                        @if($log->user)
-                            <span class="font-weight-bold">{{ $log->user->name }}</span>
-                        @else
-                            <em class="text-muted">System</em>
-                        @endif
-                    </td>
-                    <td>
-                        @php
-                            $badge = match($log->action) {
-                                'created'  => 'success',
-                                'updated'  => 'info',
-                                'deleted'  => 'danger',
-                                'restored' => 'warning',
-                                default    => 'secondary',
-                            };
-                        @endphp
-                        <span class="badge badge-{{ $badge }}">{{ $log->action }}</span>
-                    </td>
-                    <td>
-                        <span class="text-muted small">{{ class_basename($log->model_type) }}</span><br>
-                        <strong>{{ $log->model_label }}</strong>
-                    </td>
-                    <td class="small">{{ $log->description }}</td>
-                    <td>
-                        @if($log->old_values || $log->new_values)
-                            <a href="{{ route('admin.activity-log.show', $log) }}"
-                               class="btn btn-xs btn-outline-secondary">
-                                <i class="fas fa-eye"></i> Diff
-                            </a>
-                        @endif
-                    </td>
-                </tr>
-                @empty
-                <tr>
-                    <td colspan="6" class="text-center text-muted py-4">No activity records found.</td>
-                </tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
+    <x-ui.card :flush="true">
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr><th>When</th><th>Who</th><th>Action</th><th>Record</th><th>From</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @forelse($logs as $log)
+                        <tr>
+                            <td class="small">
+                                {{ $log->created_at?->format('d M Y H:i') }}
+                                <div class="tiny muted-3">{{ $log->created_at?->diffForHumans() }}</div>
+                            </td>
+                            <td class="small">{{ $log->user?->name ?? 'System' }}</td>
+                            <td>
+                                <x-ui.pill :tone="match($log->action) {
+                                    'created' => 'ok', 'deleted' => 'danger', 'restored' => 'info', default => null }">
+                                    {{ ucfirst($log->action) }}
+                                </x-ui.pill>
+                            </td>
+                            <td>
+                                <span class="strong">{{ Str::limit($log->model_label ?? class_basename($log->model_type), 44) }}</span>
+                                <div class="tiny muted-3">{{ class_basename($log->model_type) }} #{{ $log->model_id }}</div>
+                            </td>
+                            <td class="tiny mono muted-3">{{ $log->ip_address }}</td>
+                            <td class="num">
+                                <a href="{{ route('admin.activity-log.show', $log) }}" class="btn btn-sm">Detail</a>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="6"><x-ui.empty icon="fa-history" title="No entries match">
+                            Every create, update and delete on a grant record is logged here with the field-level
+                            before and after.
+                        </x-ui.empty></td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </x-ui.card>
 
-    @if($logs->hasPages())
-    <div class="card-footer">
-        {{ $logs->links() }}
-    </div>
-    @endif
+    <div class="pagination-wrap">{{ $logs->links() }}</div>
 </div>
 @endsection

@@ -1,223 +1,134 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', 'Edit Profile – ' . $user->name)
-
-@section('content_header')
-    <h1><i class="fas fa-user-edit mr-2"></i>Edit Profile – {{ $user->name }}</h1>
-@endsection
+@section('title', 'Edit profile')
+@section('crumb', 'Researcher profile')
 
 @section('content')
+@php
+    $quals = old('qual_degree') ? array_keys(old('qual_degree')) : range(0, max(2, count($profile->qualifications ?? []) - 1));
+    $pubs  = old('pub_title') ? array_keys(old('pub_title')) : range(0, max(2, count($profile->publications ?? []) - 1));
+    $existingQuals = collect($profile->qualifications ?? [])->values();
+    $existingPubs  = collect($profile->publications ?? [])->values();
+@endphp
+
+<x-ui.page-head
+    title="Edit profile"
+    :lede="$user->name . ' · what the matching engine reads when a call comes in'">
+    <x-slot:actions>
+        <a href="{{ route('researchers.show', $user) }}" class="btn">View profile</a>
+    </x-slot:actions>
+</x-ui.page-head>
+
 <form method="POST" action="{{ route('researchers.update', $user) }}">
     @csrf @method('PUT')
 
-    @if($errors->any())
-        <div class="alert alert-danger">
-            <ul class="mb-0">@foreach($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul>
-        </div>
-    @endif
+    <div class="grid grid-wide">
+        <div class="stack">
+            <x-ui.card title="About">
+                <div class="form-grid">
+                    <x-ui.field label="Title" name="title">
+                        <input name="title" class="input" value="{{ old('title', $profile->title) }}" maxlength="20" placeholder="Dr.">
+                    </x-ui.field>
 
-    {{-- Basic Info --}}
-    <div class="card card-outline card-primary">
-        <div class="card-header"><h3 class="card-title">Professional Information</h3></div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-2">
-                    <div class="form-group">
-                        <label>Title</label>
-                        <select name="title" class="form-control form-control-sm">
-                            <option value="">—</option>
-                            @foreach(['Dr.','Prof.','Mr.','Ms.','Mrs.'] as $t)
-                                <option value="{{ $t }}" @selected(old('title', $profile->title) === $t)>{{ $t }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                </div>
-                <div class="col-md-5">
-                    <div class="form-group">
-                        <label>Position / Job Title</label>
-                        <input type="text" name="position" class="form-control form-control-sm"
-                               value="{{ old('position', $profile->position) }}">
-                    </div>
-                </div>
-                <div class="col-md-5">
-                    <div class="form-group">
-                        <label>Department</label>
-                        <input type="text" name="department" class="form-control form-control-sm"
-                               value="{{ old('department', $profile->department) }}">
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="form-group">
-                        <label>Research Centre</label>
-                        <input type="text" name="research_center" class="form-control form-control-sm"
-                               value="{{ old('research_center', $profile->research_center) }}">
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="form-group">
-                        <label>Phone</label>
-                        <input type="text" name="phone" class="form-control form-control-sm"
-                               value="{{ old('phone', $profile->phone) }}">
-                    </div>
-                </div>
-                <div class="col-md-12">
-                    <div class="form-group">
-                        <label>Biography / Research Summary <small class="text-muted">(max 3000 chars)</small></label>
-                        <textarea name="bio" class="form-control form-control-sm" rows="4">{{ old('bio', $profile->bio) }}</textarea>
-                    </div>
-                </div>
-                <div class="col-md-12">
-                    <div class="form-group">
-                        <label>Expertise Areas <small class="text-muted">comma-separated</small></label>
-                        <input type="text" name="expertise_areas" class="form-control form-control-sm"
-                               value="{{ old('expertise_areas', implode(', ', $profile->expertise_areas ?? [])) }}"
-                               placeholder="Epidemiology, Malaria, One Health, Clinical Trials">
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+                    <x-ui.field label="Position" name="position">
+                        <input name="position" class="input" value="{{ old('position', $profile->position) }}"
+                               placeholder="Principal Research Scientist">
+                    </x-ui.field>
 
-    {{-- Links & ORCID --}}
-    <div class="card card-outline card-info">
-        <div class="card-header"><h3 class="card-title">Links & Identifiers</h3></div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="form-group">
-                        <label>ORCID iD <small class="text-muted">0000-0000-0000-0000</small></label>
-                        <input type="text" name="orcid_id" class="form-control form-control-sm"
-                               value="{{ old('orcid_id', $profile->orcid_id) }}"
-                               placeholder="0000-0002-1825-0097">
-                        @if($profile->orcid_id)
-                            <small class="text-success"><i class="fas fa-check-circle"></i> ORCID recorded
-                                @if($profile->orcid_synced_at)
-                                    — synced {{ $profile->orcid_synced_at->diffForHumans() }}
-                                @else
-                                    (OAuth sync not yet configured)
-                                @endif
-                            </small>
-                        @endif
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="form-group">
-                        <label>LinkedIn URL</label>
-                        <input type="url" name="linkedin_url" class="form-control form-control-sm"
-                               value="{{ old('linkedin_url', $profile->linkedin_url) }}">
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="form-group">
-                        <label>ResearchGate URL</label>
-                        <input type="url" name="researchgate_url" class="form-control form-control-sm"
-                               value="{{ old('researchgate_url', $profile->researchgate_url) }}">
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+                    <x-ui.field label="Department" name="department">
+                        <input name="department" class="input" value="{{ old('department', $profile->department) }}">
+                    </x-ui.field>
 
-    {{-- Qualifications --}}
-    <div class="card card-outline card-secondary">
-        <div class="card-header d-flex justify-content-between">
-            <h3 class="card-title">Qualifications</h3>
-            <button type="button" class="btn btn-xs btn-outline-secondary" onclick="addQual()">+ Add</button>
-        </div>
-        <div class="card-body" id="qualContainer">
-            @foreach(old('qual_degree', array_column($profile->qualifications ?? [], 'degree')) as $i => $deg)
-            <div class="row qual-row mb-2">
-                <div class="col-md-2">
-                    <input type="text" name="qual_degree[]" class="form-control form-control-sm" placeholder="Degree"
-                           value="{{ $deg }}">
-                </div>
-                <div class="col-md-3">
-                    <input type="text" name="qual_field[]" class="form-control form-control-sm" placeholder="Field"
-                           value="{{ old('qual_field.'.$i, ($profile->qualifications[$i]['field'] ?? '')) }}">
-                </div>
-                <div class="col-md-4">
-                    <input type="text" name="qual_institution[]" class="form-control form-control-sm" placeholder="Institution"
-                           value="{{ old('qual_institution.'.$i, ($profile->qualifications[$i]['institution'] ?? '')) }}">
-                </div>
-                <div class="col-md-2">
-                    <input type="number" name="qual_year[]" class="form-control form-control-sm" placeholder="Year"
-                           value="{{ old('qual_year.'.$i, ($profile->qualifications[$i]['year'] ?? '')) }}">
-                </div>
-                <div class="col-md-1">
-                    <button type="button" class="btn btn-xs btn-outline-danger" onclick="this.closest('.qual-row').remove()">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-            </div>
-            @endforeach
-        </div>
-    </div>
+                    <x-ui.field label="Research centre" name="research_center">
+                        <input name="research_center" class="input" value="{{ old('research_center', $profile->research_center) }}">
+                    </x-ui.field>
 
-    {{-- Publications --}}
-    <div class="card card-outline card-success">
-        <div class="card-header d-flex justify-content-between">
-            <h3 class="card-title">Publications</h3>
-            <button type="button" class="btn btn-xs btn-outline-success" onclick="addPub()">+ Add</button>
-        </div>
-        <div class="card-body" id="pubContainer">
-            @foreach(old('pub_title', array_column($profile->publications ?? [], 'title')) as $i => $title)
-            <div class="row pub-row mb-2">
-                <div class="col-md-5">
-                    <input type="text" name="pub_title[]" class="form-control form-control-sm" placeholder="Title"
-                           value="{{ $title }}">
-                </div>
-                <div class="col-md-3">
-                    <input type="text" name="pub_journal[]" class="form-control form-control-sm" placeholder="Journal"
-                           value="{{ old('pub_journal.'.$i, ($profile->publications[$i]['journal'] ?? '')) }}">
-                </div>
-                <div class="col-md-1">
-                    <input type="number" name="pub_year[]" class="form-control form-control-sm" placeholder="Year"
-                           value="{{ old('pub_year.'.$i, ($profile->publications[$i]['year'] ?? '')) }}">
-                </div>
-                <div class="col-md-2">
-                    <input type="text" name="pub_doi[]" class="form-control form-control-sm" placeholder="DOI"
-                           value="{{ old('pub_doi.'.$i, ($profile->publications[$i]['doi'] ?? '')) }}">
-                </div>
-                <div class="col-md-1">
-                    <button type="button" class="btn btn-xs btn-outline-danger" onclick="this.closest('.pub-row').remove()">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-            </div>
-            @endforeach
-        </div>
-    </div>
+                    <x-ui.field label="Biography" name="bio" wide>
+                        <textarea name="bio" rows="4" class="textarea" maxlength="3000">{{ old('bio', $profile->bio) }}</textarea>
+                    </x-ui.field>
 
-    <div class="mb-4">
-        <button type="submit" class="btn btn-primary">
-            <i class="fas fa-save mr-1"></i>Save Profile
-        </button>
-        <a href="{{ route('researchers.show', $user) }}" class="btn btn-secondary ml-2">Cancel</a>
+                    <x-ui.field label="Expertise areas" name="expertise_areas" wide
+                                help="Comma separated. These are matched against call themes, so use the words a donor would use.">
+                        <input name="expertise_areas" class="input"
+                               value="{{ old('expertise_areas', collect($profile->expertise_areas ?? [])->implode(', ')) }}"
+                               placeholder="Malaria, Vector control, Epidemiology">
+                    </x-ui.field>
+                </div>
+            </x-ui.card>
+
+            <x-ui.card title="Qualifications">
+                @foreach($quals as $i)
+                    @php $q = $existingQuals[$i] ?? []; @endphp
+                    <div class="form-grid" style="margin-bottom:14px;">
+                        <x-ui.field label="Degree">
+                            <input name="qual_degree[{{ $i }}]" class="input" value="{{ old("qual_degree.$i", $q['degree'] ?? '') }}" placeholder="PhD">
+                        </x-ui.field>
+                        <x-ui.field label="Field">
+                            <input name="qual_field[{{ $i }}]" class="input" value="{{ old("qual_field.$i", $q['field'] ?? '') }}" placeholder="Epidemiology">
+                        </x-ui.field>
+                        <x-ui.field label="Institution">
+                            <input name="qual_institution[{{ $i }}]" class="input" value="{{ old("qual_institution.$i", $q['institution'] ?? '') }}">
+                        </x-ui.field>
+                        <x-ui.field label="Year">
+                            <input name="qual_year[{{ $i }}]" type="number" min="1950" max="2100" class="input"
+                                   value="{{ old("qual_year.$i", $q['year'] ?? '') }}">
+                        </x-ui.field>
+                    </div>
+                @endforeach
+                <p class="help">Leave a row blank to drop it. Qualifications in a call's theme add to the match score.</p>
+            </x-ui.card>
+
+            <x-ui.card title="Publications">
+                @foreach($pubs as $i)
+                    @php $p = $existingPubs[$i] ?? []; @endphp
+                    <div class="form-grid" style="margin-bottom:14px;">
+                        <x-ui.field label="Title" wide>
+                            <input name="pub_title[{{ $i }}]" class="input" value="{{ old("pub_title.$i", $p['title'] ?? '') }}">
+                        </x-ui.field>
+                        <x-ui.field label="Journal">
+                            <input name="pub_journal[{{ $i }}]" class="input" value="{{ old("pub_journal.$i", $p['journal'] ?? '') }}">
+                        </x-ui.field>
+                        <x-ui.field label="Year">
+                            <input name="pub_year[{{ $i }}]" type="number" min="1950" max="2100" class="input"
+                                   value="{{ old("pub_year.$i", $p['year'] ?? '') }}">
+                        </x-ui.field>
+                        <x-ui.field label="DOI">
+                            <input name="pub_doi[{{ $i }}]" class="input mono" value="{{ old("pub_doi.$i", $p['doi'] ?? '') }}">
+                        </x-ui.field>
+                    </div>
+                @endforeach
+            </x-ui.card>
+        </div>
+
+        <div class="stack">
+            <x-ui.card title="Contact and links">
+                <div class="stack-sm">
+                    <x-ui.field label="Phone" name="phone" help="Used for SMS deadline alerts">
+                        <input name="phone" class="input" value="{{ old('phone', $profile->phone) }}" maxlength="30">
+                    </x-ui.field>
+
+                    <x-ui.field label="ORCID iD" name="orcid_id" help="Format 0000-0002-1825-0097">
+                        <input name="orcid_id" class="input mono" value="{{ old('orcid_id', $profile->orcid_id) }}"
+                               pattern="\d{4}-\d{4}-\d{4}-\d{3}[\dX]">
+                    </x-ui.field>
+
+                    <x-ui.field label="LinkedIn" name="linkedin_url">
+                        <input type="url" name="linkedin_url" class="input" value="{{ old('linkedin_url', $profile->linkedin_url) }}">
+                    </x-ui.field>
+
+                    <x-ui.field label="ResearchGate" name="researchgate_url">
+                        <input type="url" name="researchgate_url" class="input" value="{{ old('researchgate_url', $profile->researchgate_url) }}">
+                    </x-ui.field>
+                </div>
+            </x-ui.card>
+
+            <x-ui.card>
+                <div class="form-actions">
+                    <button class="btn btn-primary">Save profile</button>
+                    <a href="{{ route('researchers.show', $user) }}" class="btn">Cancel</a>
+                </div>
+            </x-ui.card>
+        </div>
     </div>
 </form>
-@endsection
-
-@section('js')
-<script>
-function addQual() {
-    const row = `<div class="row qual-row mb-2">
-        <div class="col-md-2"><input type="text" name="qual_degree[]" class="form-control form-control-sm" placeholder="Degree"></div>
-        <div class="col-md-3"><input type="text" name="qual_field[]" class="form-control form-control-sm" placeholder="Field"></div>
-        <div class="col-md-4"><input type="text" name="qual_institution[]" class="form-control form-control-sm" placeholder="Institution"></div>
-        <div class="col-md-2"><input type="number" name="qual_year[]" class="form-control form-control-sm" placeholder="Year"></div>
-        <div class="col-md-1"><button type="button" class="btn btn-xs btn-outline-danger" onclick="this.closest('.qual-row').remove()"><i class="fas fa-times"></i></button></div>
-    </div>`;
-    document.getElementById('qualContainer').insertAdjacentHTML('beforeend', row);
-}
-function addPub() {
-    const row = `<div class="row pub-row mb-2">
-        <div class="col-md-5"><input type="text" name="pub_title[]" class="form-control form-control-sm" placeholder="Title"></div>
-        <div class="col-md-3"><input type="text" name="pub_journal[]" class="form-control form-control-sm" placeholder="Journal"></div>
-        <div class="col-md-1"><input type="number" name="pub_year[]" class="form-control form-control-sm" placeholder="Year"></div>
-        <div class="col-md-2"><input type="text" name="pub_doi[]" class="form-control form-control-sm" placeholder="DOI"></div>
-        <div class="col-md-1"><button type="button" class="btn btn-xs btn-outline-danger" onclick="this.closest('.pub-row').remove()"><i class="fas fa-times"></i></button></div>
-    </div>`;
-    document.getElementById('pubContainer').insertAdjacentHTML('beforeend', row);
-}
-</script>
 @endsection

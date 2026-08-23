@@ -1,146 +1,87 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', 'Add Report')
-
-@section('content_header')
-    <div class="d-flex justify-content-between align-items-center">
-        <h1><i class="fas fa-plus-circle mr-2"></i>Add Report</h1>
-        <a href="{{ route('reports.index') }}" class="btn btn-default"><i class="fas fa-arrow-left mr-1"></i>Back</a>
-    </div>
-@endsection
+@section('title', 'Record a report')
+@section('crumb', 'Awards & compliance')
 
 @section('content')
+<x-ui.page-head
+    title="Record a report"
+    lede="Most reporting deadlines are generated when an award is set up. Use this for anything outside that schedule." />
 
-<form action="{{ route('reports.store') }}" method="POST" enctype="multipart/form-data">
-@csrf
+<form method="POST" action="{{ route('reports.store') }}" enctype="multipart/form-data">
+    @csrf
 
-<div class="row">
-    <div class="col-md-8">
+    <div class="grid grid-wide">
+        <div class="stack">
+            <x-ui.card title="The report">
+                <div class="form-grid">
+                    <x-ui.field label="Award" name="award_id" required wide>
+                        <select name="award_id" class="select" required>
+                            <option value="">Choose the award…</option>
+                            @foreach($awards as $award)
+                                <option value="{{ $award->id }}" @selected(old('award_id', $selectedAward?->id) == $award->id)>
+                                    {{ $award->contract_number }} — {{ Str::limit($award->title, 44) }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </x-ui.field>
 
-        <div class="card card-outline card-info">
-            <div class="card-header"><h3 class="card-title">Report Details</h3></div>
-            <div class="card-body">
+                    <x-ui.field label="Title" name="title" required wide>
+                        <input name="title" class="input" value="{{ old('title') }}" required maxlength="255"
+                               placeholder="Technical report — period 3">
+                    </x-ui.field>
 
-                <div class="form-group">
-                    <label>Award <span class="text-danger">*</span></label>
-                    <select name="award_id" class="form-control select2 @error('award_id') is-invalid @enderror">
-                        <option value="">-- Select Award --</option>
-                        @foreach($awards as $award)
-                            <option value="{{ $award->id }}"
-                                {{ old('award_id', $selectedAward?->id) == $award->id ? 'selected' : '' }}>
-                                {{ $award->title }} — {{ $award->donor->acronym ?? $award->donor->name }}
-                            </option>
-                        @endforeach
-                    </select>
-                    @error('award_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    <x-ui.field label="Type" name="report_type" required>
+                        <select name="report_type" class="select" required>
+                            @foreach(['technical' => 'Technical', 'financial' => 'Financial', 'combined' => 'Combined'] as $value => $label)
+                                <option value="{{ $value }}" @selected(old('report_type') === $value)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </x-ui.field>
+
+                    <x-ui.field label="Due date" name="due_date" required>
+                        <input type="date" name="due_date" class="input" value="{{ old('due_date') }}" required>
+                    </x-ui.field>
+
+                    <x-ui.field label="Period start" name="period_start">
+                        <input type="date" name="period_start" class="input" value="{{ old('period_start') }}">
+                    </x-ui.field>
+
+                    <x-ui.field label="Period end" name="period_end">
+                        <input type="date" name="period_end" class="input" value="{{ old('period_end') }}">
+                    </x-ui.field>
                 </div>
-
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label>Report Type <span class="text-danger">*</span></label>
-                            <select name="report_type" class="form-control @error('report_type') is-invalid @enderror">
-                                <option value="technical" {{ old('report_type') === 'technical' ? 'selected' : '' }}>Technical</option>
-                                <option value="financial" {{ old('report_type') === 'financial' ? 'selected' : '' }}>Financial</option>
-                                <option value="combined"  {{ old('report_type') === 'combined'  ? 'selected' : '' }}>Combined (Technical + Financial)</option>
-                            </select>
-                            @error('report_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label>Status <span class="text-danger">*</span></label>
-                            <select name="status" class="form-control">
-                                <option value="pending"     {{ old('status','pending')     === 'pending'     ? 'selected' : '' }}>Pending (not yet due)</option>
-                                <option value="submitted"   {{ old('status') === 'submitted'   ? 'selected' : '' }}>Submitted</option>
-                                <option value="under_review"{{ old('status') === 'under_review'? 'selected' : '' }}>Under Review</option>
-                                <option value="approved"    {{ old('status') === 'approved'    ? 'selected' : '' }}>Approved</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Report Title <span class="text-danger">*</span></label>
-                    <input type="text" name="title" value="{{ old('title') }}"
-                           class="form-control @error('title') is-invalid @enderror"
-                           placeholder="e.g. Year 1 Technical Progress Report">
-                    @error('title')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                </div>
-
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label>Reporting Period Start</label>
-                            <input type="date" name="period_start" value="{{ old('period_start') }}" class="form-control">
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label>Reporting Period End</label>
-                            <input type="date" name="period_end" value="{{ old('period_end') }}" class="form-control">
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label>Due Date <span class="text-danger">*</span></label>
-                            <input type="date" name="due_date" value="{{ old('due_date') }}"
-                                   class="form-control @error('due_date') is-invalid @enderror">
-                            @error('due_date')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>GMU Comments / Notes</label>
-                    <textarea name="gmu_comments" rows="3" class="form-control"
-                              placeholder="Internal notes on this report...">{{ old('gmu_comments') }}</textarea>
-                </div>
-
-                <div class="form-group">
-                    <label>Report File (PDF/Word/Excel)</label>
-                    <div class="custom-file">
-                        <input type="file" name="file_path" class="custom-file-input" id="reportFile"
-                               accept=".pdf,.doc,.docx,.xlsx">
-                        <label class="custom-file-label" for="reportFile">Choose file</label>
-                    </div>
-                    <small class="text-muted">Max 20MB</small>
-                </div>
-
-            </div>
+            </x-ui.card>
         </div>
 
-    </div>
+        <div class="stack">
+            <x-ui.card title="Status and file">
+                <div class="stack-sm">
+                    <x-ui.field label="Status" name="status" required>
+                        <select name="status" class="select" required>
+                            @foreach(['pending' => 'Pending — not yet submitted', 'submitted' => 'Submitted', 'under_review' => 'Under GMU review'] as $value => $label)
+                                <option value="{{ $value }}" @selected(old('status', 'pending') === $value)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </x-ui.field>
 
-    <div class="col-md-4">
+                    <x-ui.field label="Report file" name="file_path" help="PDF, Word or Excel, up to 20 MB">
+                        <input type="file" name="file_path" class="input" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv">
+                    </x-ui.field>
 
-        <div class="card bg-light">
-            <div class="card-body">
-                <p class="font-weight-bold mb-2 small"><i class="fas fa-info-circle mr-1 text-primary"></i>Report Types</p>
-                <dl class="small text-muted">
-                    <dt>Technical</dt><dd>Progress narrative, milestones, activities</dd>
-                    <dt>Financial</dt><dd>Budget expenditure, financial statements</dd>
-                    <dt>Combined</dt><dd>Both technical and financial in one report</dd>
-                </dl>
-            </div>
+                    <x-ui.field label="GMU comments" name="gmu_comments">
+                        <textarea name="gmu_comments" rows="3" class="textarea">{{ old('gmu_comments') }}</textarea>
+                    </x-ui.field>
+                </div>
+            </x-ui.card>
+
+            <x-ui.card>
+                <div class="form-actions">
+                    <button class="btn btn-primary">Record report</button>
+                    <a href="{{ route('reports.index') }}" class="btn">Cancel</a>
+                </div>
+            </x-ui.card>
         </div>
-
-        <button type="submit" class="btn btn-primary btn-block btn-lg">
-            <i class="fas fa-save mr-1"></i> Save Report
-        </button>
-        <a href="{{ route('reports.index') }}" class="btn btn-default btn-block">Cancel</a>
-
     </div>
-</div>
-
 </form>
-
-@endsection
-
-@section('js')
-<script>
-document.querySelector('#reportFile')?.addEventListener('change', function(){
-    this.nextElementSibling.textContent = this.files[0]?.name || 'Choose file';
-});
-</script>
 @endsection

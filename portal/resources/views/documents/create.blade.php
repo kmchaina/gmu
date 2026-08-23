@@ -1,108 +1,65 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', 'Upload Document')
-
-@section('content_header')
-    <div class="d-flex justify-content-between align-items-center">
-        <h1><i class="fas fa-upload mr-2"></i>Upload Document</h1>
-        <a href="{{ route('documents.index') }}" class="btn btn-default"><i class="fas fa-arrow-left mr-1"></i>Back</a>
-    </div>
-@endsection
+@section('title', 'Upload a document')
+@section('crumb', 'Library')
 
 @section('content')
+<x-ui.page-head
+    title="Upload a document"
+    lede="Files are stored privately and served only to people allowed to see them. Retention is set from the category." />
 
-<form action="{{ route('documents.store') }}" method="POST" enctype="multipart/form-data">
-@csrf
+<form method="POST" action="{{ route('documents.store') }}" enctype="multipart/form-data">
+    @csrf
 
-<div class="row">
-    <div class="col-md-8">
-        <div class="card card-outline card-primary">
-            <div class="card-header"><h3 class="card-title">Document Details</h3></div>
-            <div class="card-body">
+    <div class="grid grid-wide">
+        <x-ui.card title="The document">
+            <div class="form-grid">
+                <x-ui.field label="Title" name="title" required wide>
+                    <input name="title" class="input" value="{{ old('title') }}" required maxlength="255">
+                </x-ui.field>
 
-                <div class="form-group">
-                    <label>Title <span class="text-danger">*</span></label>
-                    <input type="text" name="title" value="{{ old('title') }}"
-                           class="form-control @error('title') is-invalid @enderror"
-                           placeholder="e.g. Grant Application SOP v2">
-                    @error('title')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                </div>
+                <x-ui.field label="Category" name="category" required help="Sets the default retention period">
+                    <select name="category" class="select" required>
+                        @foreach(['sop' => 'SOP (5 years)', 'template' => 'Template (3 years)', 'policy' => 'Policy (5 years)', 'contract' => 'Contract (10 years)', 'report' => 'Report (7 years)', 'audit' => 'Audit evidence (7 years)', 'other' => 'Other (5 years)'] as $value => $label)
+                            <option value="{{ $value }}" @selected(old('category') === $value)>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </x-ui.field>
 
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label>Category <span class="text-danger">*</span></label>
-                            <select name="category" class="form-control @error('category') is-invalid @enderror">
-                                <option value="">-- Select Category --</option>
-                                <option value="sop"      {{ old('category') === 'sop'      ? 'selected' : '' }}>Standard Operating Procedure (SOP)</option>
-                                <option value="template" {{ old('category') === 'template' ? 'selected' : '' }}>Template</option>
-                                <option value="policy"   {{ old('category') === 'policy'   ? 'selected' : '' }}>Policy Document</option>
-                                <option value="contract" {{ old('category') === 'contract' ? 'selected' : '' }}>Contract / Agreement</option>
-                                <option value="report"   {{ old('category') === 'report'   ? 'selected' : '' }}>Report</option>
-                                <option value="audit"    {{ old('category') === 'audit'    ? 'selected' : '' }}>Audit Document</option>
-                                <option value="other"    {{ old('category') === 'other'    ? 'selected' : '' }}>Other</option>
-                            </select>
-                            @error('category')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label>Version <span class="text-danger">*</span></label>
-                            <input type="number" name="version" value="{{ old('version', 1) }}"
-                                   class="form-control" min="1" max="99">
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label>Access</label>
-                            <div class="mt-2">
-                                <div class="custom-control custom-switch">
-                                    <input type="checkbox" name="is_public" value="1" class="custom-control-input"
-                                           id="isPublic" {{ old('is_public') ? 'checked' : '' }}>
-                                    <label class="custom-control-label" for="isPublic">Public</label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <x-ui.field label="Version" name="version" required>
+                    <input type="number" name="version" min="1" class="input" value="{{ old('version', 1) }}" required>
+                </x-ui.field>
 
-                <div class="form-group">
-                    <label>Description</label>
-                    <textarea name="description" rows="3" class="form-control"
-                              placeholder="Brief description of this document...">{{ old('description') }}</textarea>
-                </div>
+                <x-ui.field label="Description" name="description" wide>
+                    <textarea name="description" rows="3" class="textarea">{{ old('description') }}</textarea>
+                </x-ui.field>
 
-                <div class="form-group">
-                    <label>File <span class="text-danger">*</span></label>
-                    <div class="custom-file">
-                        <input type="file" name="file" class="custom-file-input @error('file') is-invalid @enderror"
-                               id="docFile">
-                        <label class="custom-file-label" for="docFile">Choose file (PDF/Word/Excel/etc.)</label>
-                    </div>
-                    @error('file')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
-                    <small class="text-muted">Max 20MB</small>
-                </div>
-
+                <x-ui.field label="File" name="file" required wide
+                            help="PDF, Word, Excel, PowerPoint, images or a zip archive — up to 20 MB">
+                    <input type="file" name="file" class="input" required>
+                </x-ui.field>
             </div>
+        </x-ui.card>
+
+        <div class="stack">
+            <x-ui.card title="Who may see it">
+                <label class="check">
+                    <input type="checkbox" name="is_public" value="1" @checked(old('is_public'))>
+                    <span>Any member of staff may open this</span>
+                </label>
+                <p class="small muted" style="margin-top:12px; line-height:1.7;">
+                    Leave unticked for anything confidential — a signed contract, an audit response, a financial
+                    statement. Restricted documents are visible to you and to GMU officers only.
+                </p>
+            </x-ui.card>
+
+            <x-ui.card>
+                <div class="form-actions">
+                    <button class="btn btn-primary"><i class="fas fa-upload"></i> Upload</button>
+                    <a href="{{ route('documents.index') }}" class="btn">Cancel</a>
+                </div>
+            </x-ui.card>
         </div>
     </div>
-
-    <div class="col-md-4">
-        <button type="submit" class="btn btn-primary btn-block btn-lg">
-            <i class="fas fa-upload mr-1"></i> Upload
-        </button>
-        <a href="{{ route('documents.index') }}" class="btn btn-default btn-block">Cancel</a>
-    </div>
-</div>
-
 </form>
-
-@endsection
-
-@section('js')
-<script>
-document.querySelector('#docFile')?.addEventListener('change', function(){
-    this.nextElementSibling.textContent = this.files[0]?.name || 'Choose file';
-});
-</script>
 @endsection

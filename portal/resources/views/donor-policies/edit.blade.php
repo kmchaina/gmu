@@ -1,122 +1,79 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', 'Edit Policy')
-
-@section('content_header')
-    <div class="d-flex justify-content-between align-items-center">
-        <h1><i class="fas fa-edit mr-2"></i>Edit Policy Document</h1>
-        <a href="{{ route('donor-policies.index') }}" class="btn btn-default"><i class="fas fa-arrow-left mr-1"></i>Back</a>
-    </div>
-@endsection
+@section('title', 'Edit donor guidance')
+@section('crumb', 'Library')
 
 @section('content')
+<x-ui.page-head title="Edit donor guidance" :lede="$donorPolicy->title">
+    <x-slot:actions>
+        <a href="{{ route('donor-policies.show', $donorPolicy) }}" class="btn"><i class="fas fa-download"></i> Open current file</a>
+    </x-slot:actions>
+</x-ui.page-head>
 
-<form action="{{ route('donor-policies.update', $donorPolicy) }}" method="POST" enctype="multipart/form-data">
-@csrf
-@method('PUT')
+<form method="POST" action="{{ route('donor-policies.update', $donorPolicy) }}" enctype="multipart/form-data">
+    @csrf @method('PUT')
 
-<div class="row">
-    <div class="col-md-8">
-        <div class="card card-outline card-primary">
-            <div class="card-header"><h3 class="card-title">Policy Details</h3></div>
-            <div class="card-body">
-
-                <div class="form-group">
-                    <label>Donor <span class="text-danger">*</span></label>
-                    <select name="donor_id" class="form-control select2 @error('donor_id') is-invalid @enderror">
+    <div class="grid grid-wide">
+        <x-ui.card title="The document">
+            <div class="form-grid">
+                <x-ui.field label="Donor" name="donor_id" required>
+                    <select name="donor_id" class="select" required>
                         @foreach($donors as $donor)
-                            <option value="{{ $donor->id }}" {{ old('donor_id', $donorPolicy->donor_id) == $donor->id ? 'selected' : '' }}>
-                                {{ $donor->name }} @if($donor->acronym)({{ $donor->acronym }})@endif
-                            </option>
+                            <option value="{{ $donor->id }}" @selected(old('donor_id', $donorPolicy->donor_id) == $donor->id)>{{ $donor->name }}</option>
                         @endforeach
                     </select>
-                    @error('donor_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                </div>
+                </x-ui.field>
 
-                <div class="form-group">
-                    <label>Title <span class="text-danger">*</span></label>
-                    <input type="text" name="title" value="{{ old('title', $donorPolicy->title) }}"
-                           class="form-control @error('title') is-invalid @enderror">
-                    @error('title')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                </div>
+                <x-ui.field label="Type" name="policy_type" required>
+                    <select name="policy_type" class="select" required>
+                        @foreach(['grant_guidelines' => 'Grant guidelines', 'reporting_template' => 'Reporting template', 'budget_template' => 'Budget template', 'compliance_policy' => 'Compliance policy', 'other' => 'Other'] as $value => $label)
+                            <option value="{{ $value }}" @selected(old('policy_type', $donorPolicy->policy_type) === $value)>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </x-ui.field>
 
-                <div class="row">
-                    <div class="col-md-5">
-                        <div class="form-group">
-                            <label>Policy Type</label>
-                            <select name="policy_type" class="form-control">
-                                <option value="grant_guidelines"   {{ old('policy_type', $donorPolicy->policy_type) === 'grant_guidelines'   ? 'selected' : '' }}>Grant Guidelines</option>
-                                <option value="reporting_template" {{ old('policy_type', $donorPolicy->policy_type) === 'reporting_template' ? 'selected' : '' }}>Reporting Template</option>
-                                <option value="budget_template"    {{ old('policy_type', $donorPolicy->policy_type) === 'budget_template'    ? 'selected' : '' }}>Budget Template</option>
-                                <option value="compliance_policy"  {{ old('policy_type', $donorPolicy->policy_type) === 'compliance_policy'  ? 'selected' : '' }}>Compliance Policy</option>
-                                <option value="other"              {{ old('policy_type', $donorPolicy->policy_type) === 'other'              ? 'selected' : '' }}>Other</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label>Version</label>
-                            <input type="number" name="version" value="{{ old('version', $donorPolicy->version) }}" class="form-control" min="1">
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label>Effective Date</label>
-                            <input type="date" name="effective_date"
-                                   value="{{ old('effective_date', $donorPolicy->effective_date?->format('Y-m-d')) }}"
-                                   class="form-control">
-                        </div>
-                    </div>
-                </div>
+                <x-ui.field label="Title" name="title" required wide>
+                    <input name="title" class="input" value="{{ old('title', $donorPolicy->title) }}" required maxlength="255">
+                </x-ui.field>
 
-                <div class="form-group">
-                    <label>Notes</label>
-                    <textarea name="notes" rows="3" class="form-control">{{ old('notes', $donorPolicy->notes) }}</textarea>
-                </div>
+                <x-ui.field label="Version" name="version" required>
+                    <input type="number" name="version" min="1" class="input" value="{{ old('version', $donorPolicy->version) }}" required>
+                </x-ui.field>
 
-                <div class="form-group">
-                    <label>Replace File</label>
-                    <p>
-                        <a href="{{ route('donor-policies.show', $donorPolicy) }}" target="_blank" class="btn btn-sm btn-outline-info">
-                            <i class="fas fa-download mr-1"></i>{{ $donorPolicy->file_name }}
-                        </a>
-                    </p>
-                    <div class="custom-file">
-                        <input type="file" name="file" class="custom-file-input" id="policyFile" accept=".pdf,.doc,.docx,.xlsx">
-                        <label class="custom-file-label" for="policyFile">Choose replacement file</label>
-                    </div>
-                </div>
+                <x-ui.field label="Effective from" name="effective_date">
+                    <input type="date" name="effective_date" class="input"
+                           value="{{ old('effective_date', $donorPolicy->effective_date?->toDateString()) }}">
+                </x-ui.field>
 
+                <x-ui.field label="Notes" name="notes" wide>
+                    <textarea name="notes" rows="3" class="textarea">{{ old('notes', $donorPolicy->notes) }}</textarea>
+                </x-ui.field>
+
+                <x-ui.field label="Replace file" name="file" wide
+                            help="Leave empty to keep {{ $donorPolicy->file_name }}">
+                    <input type="file" name="file" class="input" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv">
+                </x-ui.field>
             </div>
+        </x-ui.card>
+
+        <div class="stack">
+            <x-ui.card>
+                <div class="form-actions">
+                    <button class="btn btn-primary">Save changes</button>
+                    <a href="{{ route('donor-policies.index') }}" class="btn">Cancel</a>
+                </div>
+            </x-ui.card>
+
+            @can('delete', $donorPolicy)
+                <x-ui.card title="Remove this document" accent="danger">
+                    <form method="POST" action="{{ route('donor-policies.destroy', $donorPolicy) }}"
+                          onsubmit="return confirm('Remove this document and its file?')">
+                        @csrf @method('DELETE')
+                        <button class="btn btn-danger btn-block">Remove document</button>
+                    </form>
+                </x-ui.card>
+            @endcan
         </div>
     </div>
-
-    <div class="col-md-4">
-        <button type="submit" class="btn btn-primary btn-block btn-lg">
-            <i class="fas fa-save mr-1"></i> Save Changes
-        </button>
-        <a href="{{ route('donor-policies.index') }}" class="btn btn-default btn-block">Cancel</a>
-
-        <hr>
-        <form action="{{ route('donor-policies.destroy', $donorPolicy) }}" method="POST"
-              onsubmit="return confirm('Delete this policy document?')">
-            @csrf
-            @method('DELETE')
-            <button type="submit" class="btn btn-outline-danger btn-block btn-sm">
-                <i class="fas fa-trash mr-1"></i>Delete
-            </button>
-        </form>
-    </div>
-</div>
-
 </form>
-
-@endsection
-
-@section('js')
-<script>
-document.querySelector('#policyFile')?.addEventListener('change', function(){
-    this.nextElementSibling.textContent = this.files[0]?.name || 'Choose file';
-});
-</script>
 @endsection

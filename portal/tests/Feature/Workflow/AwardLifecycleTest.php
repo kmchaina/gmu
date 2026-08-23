@@ -9,6 +9,7 @@ use App\Models\Proposal;
 use App\Models\Report;
 use App\Services\ComplianceScheduleGenerator;
 use App\Support\Days;
+use Illuminate\Support\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\BuildsGrantFixtures;
 use Tests\TestCase;
@@ -134,11 +135,21 @@ class AwardLifecycleTest extends TestCase
 
     public function test_day_counts_are_whole_days(): void
     {
+        // Frozen mid-morning: adding hours to a date must not tip the answer
+        // into the next calendar day and make this assertion depend on when
+        // the suite happens to run.
+        $this->travelTo(Carbon::parse('2026-06-15 09:00:00'));
+
         // Finding M5: Carbon 3 returns floats, so messages read
         // "12.250000298727 day(s) overdue".
         $this->assertSame(12, Days::overdueBy(now()->subDays(12)->subHours(6)));
         $this->assertSame(30, Days::until(now()->addDays(30)->addHours(5)));
         $this->assertSame(0, Days::overdueBy(now()->addDay()));
         $this->assertSame('in 5 days', Days::describe(now()->addDays(5)));
+
+        // And the calendar boundary itself: late evening plus a few hours is
+        // the following day, which is what a deadline actually means.
+        $this->travelTo(Carbon::parse('2026-06-15 21:50:00'));
+        $this->assertSame(31, Days::until(now()->addDays(30)->addHours(5)));
     }
 }

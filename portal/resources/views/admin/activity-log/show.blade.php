@@ -1,84 +1,71 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', 'Audit Log Entry')
-
-@section('content_header')
-    <h1>
-        <i class="fas fa-history mr-2"></i>Audit Entry
-        <small class="text-muted">#{{ $log->id }}</small>
-    </h1>
-@endsection
+@section('title', 'Audit entry')
+@section('crumb', 'Administration')
 
 @section('content')
-<div class="row">
-    <div class="col-md-5">
-        <div class="card card-outline card-primary">
-            <div class="card-header"><h3 class="card-title">Details</h3></div>
-            <div class="card-body p-0">
-                <table class="table table-sm mb-0">
-                    <tr><th class="w-35 pl-3">When</th><td>{{ $log->created_at->format('d M Y H:i:s') }}</td></tr>
-                    <tr><th class="pl-3">User</th><td>{{ $log->user?->name ?? 'System' }}</td></tr>
-                    <tr><th class="pl-3">Action</th>
-                        <td>
-                            @php $badge = match($log->action) { 'created'=>'success','updated'=>'info','deleted'=>'danger','restored'=>'warning',default=>'secondary' }; @endphp
-                            <span class="badge badge-{{ $badge }}">{{ $log->action }}</span>
-                        </td>
-                    </tr>
-                    <tr><th class="pl-3">Model</th><td>{{ class_basename($log->model_type) }} (ID {{ $log->model_id }})</td></tr>
-                    <tr><th class="pl-3">Record</th><td><strong>{{ $log->model_label }}</strong></td></tr>
-                    <tr><th class="pl-3">Description</th><td>{{ $log->description }}</td></tr>
-                    <tr><th class="pl-3">IP Address</th><td><code>{{ $log->ip_address ?? '—' }}</code></td></tr>
-                </table>
-            </div>
-        </div>
-    </div>
+@php
+    $old  = $log->old_values ?? [];
+    $new  = $log->new_values ?? [];
+    $keys = collect(array_keys($old + $new))->sort()->values();
+@endphp
 
-    <div class="col-md-7">
-        @if($log->old_values || $log->new_values)
-        <div class="card card-outline card-secondary">
-            <div class="card-header"><h3 class="card-title">Field Changes</h3></div>
-            <div class="card-body p-0">
-                <table class="table table-sm mb-0">
-                    <thead class="thead-light">
-                        <tr>
-                            <th class="pl-3">Field</th>
-                            <th><span class="text-danger">Before</span></th>
-                            <th><span class="text-success">After</span></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @php
-                            $fields = array_unique(array_merge(
-                                array_keys($log->old_values ?? []),
-                                array_keys($log->new_values ?? [])
-                            ));
-                        @endphp
-                        @foreach($fields as $field)
-                        <tr>
-                            <td class="pl-3 font-weight-bold small text-muted">{{ $field }}</td>
-                            <td class="small">
-                                <span class="text-danger">
-                                    {{ $log->old_values[$field] ?? '—' }}
-                                </span>
-                            </td>
-                            <td class="small">
-                                <span class="text-success">
-                                    {{ $log->new_values[$field] ?? '—' }}
-                                </span>
-                            </td>
-                        </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
+<div class="page-head">
+    <div style="min-width:0;">
+        <a href="{{ route('admin.activity-log.index') }}" class="small">&larr; Audit log</a>
+        <h1 style="margin-top:8px;">{{ $log->description }}</h1>
+        <div class="row" style="gap:12px; margin-top:10px;">
+            <x-ui.pill :tone="match($log->action) { 'created' => 'ok', 'deleted' => 'danger', 'restored' => 'info', default => null }">
+                {{ ucfirst($log->action) }}
+            </x-ui.pill>
+            <span class="small muted">{{ $log->created_at?->format('d M Y \a\t H:i') }}</span>
+            <span class="small muted-3">{{ $log->user?->name ?? 'System' }}</span>
         </div>
-        @else
-        <div class="alert alert-light">No field-level diff recorded for this entry.</div>
-        @endif
     </div>
 </div>
 
-<a href="{{ route('admin.activity-log.index') }}" class="btn btn-secondary">
-    <i class="fas fa-arrow-left mr-1"></i> Back to Audit Log
-</a>
+<div class="grid grid-wide">
+    <x-ui.card title="What changed" note="Field by field, before and after" :flush="true">
+        <div class="table-wrap">
+            <table class="table">
+                <thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead>
+                <tbody>
+                    @forelse($keys as $key)
+                        @php
+                            $before = $old[$key] ?? null;
+                            $after  = $new[$key] ?? null;
+                        @endphp
+                        <tr>
+                            <td class="strong">{{ Str::headline($key) }}</td>
+                            <td class="small" style="color:var(--danger-ink);">
+                                {{ is_scalar($before) || $before === null ? ($before ?? '—') : json_encode($before) }}
+                            </td>
+                            <td class="small" style="color:var(--ok-ink);">
+                                {{ is_scalar($after) || $after === null ? ($after ?? '—') : json_encode($after) }}
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="3"><x-ui.empty icon="fa-equals">No field values were recorded for this entry.</x-ui.empty></td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </x-ui.card>
+
+    <x-ui.card title="Context">
+        <div class="stack-sm small">
+            <div class="row-between"><span class="muted">Record</span><span>{{ class_basename($log->model_type) }} #{{ $log->model_id }}</span></div>
+            <div class="row-between"><span class="muted">Label</span><span>{{ Str::limit($log->model_label, 26) }}</span></div>
+            <div class="row-between"><span class="muted">Person</span><span>{{ $log->user?->name ?? 'System' }}</span></div>
+            <div class="row-between"><span class="muted">When</span><span>{{ $log->created_at?->format('d M Y H:i:s') }}</span></div>
+            <div class="row-between"><span class="muted">IP address</span><span class="mono">{{ $log->ip_address ?? '—' }}</span></div>
+        </div>
+
+        @if($log->user_agent)
+            <div class="divider"></div>
+            <div class="eyebrow" style="margin-bottom:6px;">User agent</div>
+            <p class="tiny muted-3" style="line-height:1.6; word-break:break-word;">{{ $log->user_agent }}</p>
+        @endif
+    </x-ui.card>
+</div>
 @endsection

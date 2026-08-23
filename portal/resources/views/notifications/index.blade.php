@@ -1,59 +1,55 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
 @section('title', 'Notifications')
-
-@section('content_header')
-    <h1><i class="fas fa-bell mr-2"></i>Notifications</h1>
-@endsection
+@section('crumb', 'Account')
 
 @section('content')
+@php
+    $icons = [
+        'new_call' => 'fa-bullhorn', 'selection_result' => 'fa-user-check', 'review_assigned' => 'fa-clipboard-check',
+        'proposal_status' => 'fa-file-alt', 'proposal_cleared' => 'fa-stamp', 'award_created' => 'fa-trophy',
+        'award_amended' => 'fa-file-signature', 'award_closed' => 'fa-flag-checkered', 'report_due' => 'fa-file-invoice',
+        'report_decision' => 'fa-check-double', 'compliance_due' => 'fa-calendar-check',
+        'compliance_overdue' => 'fa-exclamation-triangle', 'ethics_renewal' => 'fa-shield-alt',
+        'team_added' => 'fa-users', 'sub_award_created' => 'fa-handshake',
+    ];
+    $unread = $notifications->whereNull('read_at')->count();
+@endphp
 
-<div class="card">
-    <div class="card-header">
-        <h3 class="card-title">{{ $notifications->total() }} Notification(s)</h3>
-        <div class="card-tools">
-            <span class="badge badge-danger">
-                {{ $notifications->where('read_at', null)->count() }} unread
-            </span>
-        </div>
-    </div>
-    <div class="card-body p-0">
-        @if($notifications->isEmpty())
-            <div class="text-center text-muted py-5">
-                <i class="fas fa-bell-slash fa-3x mb-3"></i>
-                <h5>No notifications yet.</h5>
-            </div>
-        @else
-        <ul class="list-group list-group-flush">
-            @foreach($notifications as $notif)
-            <li class="list-group-item {{ is_null($notif->read_at) ? 'bg-light' : '' }}">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        @if(is_null($notif->read_at))
-                            <span class="badge badge-primary mr-2">New</span>
-                        @endif
-                        <strong>{{ $notif->title }}</strong>
-                        <p class="mb-1 text-muted">{{ $notif->message }}</p>
-                        <small class="text-muted">{{ $notif->created_at->diffForHumans() }}</small>
-                    </div>
-                    @if(is_null($notif->read_at))
-                    <form action="{{ route('notifications.read', $notif) }}" method="POST">
-                        @csrf
-                        @method('PATCH')
-                        <button type="submit" class="btn btn-xs btn-outline-secondary">
-                            Mark read
-                        </button>
-                    </form>
-                    @endif
+<x-ui.page-head
+    title="Notifications"
+    :lede="$unread > 0 ? $unread . ' unread on this page' : 'Everything here has been read'" />
+
+<x-ui.card :flush="true">
+    <div class="list">
+        @forelse($notifications as $notification)
+            <div class="list-row" style="align-items:flex-start; background: {{ $notification->read_at ? 'transparent' : 'var(--info-bg)' }};">
+                <span style="width:34px; height:34px; border-radius:9px; flex:0 0 34px; display:flex; align-items:center;
+                             justify-content:center; background:var(--line-soft); color:var(--navy-500);">
+                    <i class="fas {{ $icons[$notification->type] ?? 'fa-bell' }}"></i>
+                </span>
+
+                <div class="list-main">
+                    <span class="list-title">{{ $notification->title }}</span>
+                    <span class="list-sub" style="color:var(--muted); line-height:1.6;">{{ $notification->message }}</span>
+                    <span class="tiny muted-3" style="margin-top:4px;">{{ $notification->created_at?->diffForHumans() }}</span>
                 </div>
-            </li>
-            @endforeach
-        </ul>
-        @endif
-    </div>
-    @if($notifications->hasPages())
-    <div class="card-footer">{{ $notifications->links() }}</div>
-    @endif
-</div>
 
+                @unless($notification->read_at)
+                    <form method="POST" action="{{ route('notifications.read', $notification) }}" class="inline-form">
+                        @csrf @method('PATCH')
+                        <button class="btn btn-sm">Mark read</button>
+                    </form>
+                @endunless
+            </div>
+        @empty
+            <x-ui.empty icon="fa-bell" title="Nothing to read">
+                Notifications arrive when a call opens, a review is waiting on you, a report falls due, an award is
+                recorded, or a deadline slips.
+            </x-ui.empty>
+        @endforelse
+    </div>
+</x-ui.card>
+
+<div class="pagination-wrap">{{ $notifications->links() }}</div>
 @endsection
