@@ -1,134 +1,124 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', 'Funding Calls')
-
-@section('content_header')
-    <div class="d-flex justify-content-between align-items-center">
-        <h1><i class="fas fa-bullhorn mr-2"></i>Funding Calls</h1>
-        @if(auth()->user()->hasAnyRole(['coordinator','planning_officer']))
-        <a href="{{ route('calls.create') }}" class="btn btn-primary">
-            <i class="fas fa-plus mr-1"></i> Post New Call
-        </a>
-        @endif
-    </div>
-@endsection
+@section('title', 'Funding calls')
+@section('crumb', 'Grant opportunities')
 
 @section('content')
+@php
+    $openCount   = $calls->where('status', 'open')->count();
+    $closedCount = $calls->where('status', '!=', 'open')->count();
+    $filter      = request('filter') ?: request('status');
+@endphp
 
-{{-- Filters --}}
-<div class="card card-outline card-primary">
-    <div class="card-header"><h3 class="card-title"><i class="fas fa-filter mr-1"></i>Filter Calls</h3></div>
-    <div class="card-body">
-        <form method="GET" action="{{ route('calls.index') }}" class="form-inline flex-wrap" style="gap:10px;">
-            <input type="text" name="search" value="{{ request('search') }}"
-                   class="form-control form-control-sm" placeholder="Search title or theme..." style="min-width:220px;">
-            <select name="status" class="form-control form-control-sm">
-                <option value="">All Statuses</option>
-                <option value="open"     {{ request('status') === 'open'     ? 'selected' : '' }}>Open</option>
-                <option value="closed"   {{ request('status') === 'closed'   ? 'selected' : '' }}>Closed</option>
-                <option value="draft"    {{ request('status') === 'draft'    ? 'selected' : '' }}>Draft</option>
-                <option value="archived" {{ request('status') === 'archived' ? 'selected' : '' }}>Archived</option>
-            </select>
-            <select name="donor_id" class="form-control form-control-sm">
-                <option value="">All Donors</option>
+<x-ui.page-head
+    title="Funding calls"
+    :lede="$calls->total() . ' ' . Str::plural('call', $calls->total()) . ' on record · ' . $openCount . ' open on this page'">
+    <x-slot:actions>
+        @can('create', App\Models\FundingCall::class)
+            <a href="{{ route('calls.create') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Post a call</a>
+        @endcan
+    </x-slot:actions>
+</x-ui.page-head>
+
+<div class="stack">
+
+    <div class="row-between">
+        <div class="chips">
+            <a href="{{ route('calls.index') }}" class="chip {{ ! $filter ? 'is-active' : '' }}">All</a>
+            <a href="{{ route('calls.index', ['status' => 'open']) }}" class="chip {{ $filter === 'open' ? 'is-active' : '' }}">Open</a>
+            <a href="{{ route('calls.index', ['filter' => 'closing_soon']) }}" class="chip {{ $filter === 'closing_soon' ? 'is-active' : '' }}">Closing soon</a>
+            <a href="{{ route('calls.index', ['status' => 'closed']) }}" class="chip {{ $filter === 'closed' ? 'is-active' : '' }}">Closed</a>
+            <a href="{{ route('calls.index', ['status' => 'draft']) }}" class="chip {{ $filter === 'draft' ? 'is-active' : '' }}">Draft</a>
+        </div>
+
+        <form method="GET" class="row" style="gap:8px;">
+            @if($filter)<input type="hidden" name="{{ request('filter') ? 'filter' : 'status' }}" value="{{ $filter }}">@endif
+            <select name="donor_id" class="select" style="width:190px;" onchange="this.form.submit()">
+                <option value="">All donors</option>
                 @foreach($donors as $donor)
-                    <option value="{{ $donor->id }}" {{ request('donor_id') == $donor->id ? 'selected' : '' }}>
-                        {{ $donor->acronym ?? $donor->name }}
-                    </option>
+                    <option value="{{ $donor->id }}" @selected(request('donor_id') == $donor->id)>{{ $donor->acronym ?? $donor->name }}</option>
                 @endforeach
             </select>
-            <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-search mr-1"></i>Search</button>
-            <a href="{{ route('calls.index') }}" class="btn btn-sm btn-default">Reset</a>
+            <input type="search" name="search" class="input" style="width:200px;" placeholder="Search title or theme"
+                   value="{{ request('search') }}">
+            <button class="btn"><i class="fas fa-search"></i></button>
         </form>
     </div>
-</div>
 
-{{-- Calls Table --}}
-<div class="card">
-    <div class="card-header">
-        <h3 class="card-title">{{ $calls->total() }} Call(s) Found</h3>
-    </div>
-    <div class="card-body p-0">
-        @if($calls->isEmpty())
-            <div class="text-center text-muted py-5">
-                <i class="fas fa-search fa-3x mb-3"></i>
-                <h5>No funding calls found.</h5>
-                @if(auth()->user()->hasAnyRole(['coordinator','planning_officer']))
-                    <a href="{{ route('calls.create') }}" class="btn btn-primary mt-2">Post the First Call</a>
-                @endif
-            </div>
-        @else
-        <table class="table table-hover table-bordered mb-0">
-            <thead class="thead-light">
-                <tr>
-                    <th width="40">#</th>
-                    <th>Title</th>
-                    <th>Donor</th>
-                    <th>Theme</th>
-                    <th>Deadline</th>
-                    <th>Status</th>
-                    <th width="60">Interest</th>
-                    <th width="100">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($calls as $i => $call)
-                <tr>
-                    <td>{{ $calls->firstItem() + $i }}</td>
-                    <td>
-                        <a href="{{ route('calls.show', $call) }}" class="font-weight-bold text-dark">
-                            {{ $call->title }}
-                        </a>
-                        @if($call->solicitation_number)
-                            <br><small class="text-muted">Ref: {{ $call->solicitation_number }}</small>
-                        @endif
-                    </td>
-                    <td><span class="badge badge-secondary">{{ $call->donor->acronym ?? $call->donor->name }}</span></td>
-                    <td>{{ $call->theme ?? '-' }}</td>
-                    <td>
-                        @php $days = $call->days_until_deadline; @endphp
-                        <strong>{{ $call->deadline->format('d M Y') }}</strong>
+    <div class="grid grid-cards">
+        @forelse($calls as $call)
+            @php
+                $days   = $call->days_until_deadline;
+                $urgent = $call->status === 'open' && $days <= 7;
+                $soon   = $call->status === 'open' && $days > 7 && $days <= 14;
+            @endphp
+
+            <div class="card {{ $urgent ? 'accent-danger' : '' }}">
+                <div class="card-body" style="display:flex; flex-direction:column; gap:16px;">
+                    <div class="row-between" style="align-items:flex-start;">
+                        <div>
+                            <div class="eyebrow">
+                                {{ $call->donor?->acronym ?? $call->donor?->name }}@if($call->theme) · {{ $call->theme }}@endif
+                            </div>
+                            <a href="{{ route('calls.show', $call) }}"
+                               style="display:block; margin-top:7px; font-size:15px; font-weight:600; letter-spacing:-.2px; line-height:1.35; color:var(--ink);">
+                                {{ $call->title }}
+                            </a>
+                        </div>
+
                         @if($call->status === 'open')
-                            @if($days < 0)
-                                <br><span class="badge badge-danger">Expired</span>
-                            @elseif($days <= 7)
-                                <br><span class="badge badge-danger">{{ $days }}d left</span>
-                            @elseif($days <= 14)
-                                <br><span class="badge badge-warning">{{ $days }}d left</span>
-                            @else
-                                <br><span class="badge badge-info">{{ $days }}d left</span>
-                            @endif
+                            <x-ui.pill :tone="$urgent ? 'danger' : ($soon ? 'warn' : null)">
+                                {{ $days < 0 ? 'Closed' : 'Closes in ' . $days . 'd' }}
+                            </x-ui.pill>
+                        @else
+                            <x-ui.pill>{{ ucfirst($call->status) }}</x-ui.pill>
                         @endif
-                    </td>
-                    <td>
-                        @if($call->status === 'open') <span class="badge badge-success">Open</span>
-                        @elseif($call->status === 'closed') <span class="badge badge-danger">Closed</span>
-                        @elseif($call->status === 'draft') <span class="badge badge-warning">Draft</span>
-                        @else <span class="badge badge-secondary">Archived</span>
-                        @endif
-                    </td>
-                    <td class="text-center">
-                        <span class="badge badge-info">{{ $call->interests_count }}</span>
-                    </td>
-                    <td>
-                        <a href="{{ route('calls.show', $call) }}" class="btn btn-xs btn-outline-primary" title="View">
-                            <i class="fas fa-eye"></i>
-                        </a>
-                        @if(auth()->user()->hasAnyRole(['coordinator','planning_officer']))
-                        <a href="{{ route('calls.edit', $call) }}" class="btn btn-xs btn-outline-warning" title="Edit">
-                            <i class="fas fa-edit"></i>
-                        </a>
-                        @endif
-                    </td>
-                </tr>
-                @endforeach
-            </tbody>
-        </table>
-        @endif
-    </div>
-    @if($calls->hasPages())
-    <div class="card-footer">{{ $calls->links() }}</div>
-    @endif
-</div>
+                    </div>
 
+                    @if($call->description)
+                        <p class="small" style="color:var(--muted); line-height:1.6;">{{ Str::limit($call->description, 150) }}</p>
+                    @endif
+
+                    <div class="row-between" style="padding-top:14px; border-top:1px solid var(--line-soft);">
+                        <div class="kv">
+                            <span class="k">Estimated budget</span>
+                            <span class="v">{{ $call->estimated_budget ? $call->currency . ' ' . number_format($call->estimated_budget, 0) : 'Not stated' }}</span>
+                        </div>
+                        <div class="kv">
+                            <span class="k">Deadline</span>
+                            <span class="v">{{ $call->deadline?->format('d M Y') }}</span>
+                        </div>
+                        <div class="kv">
+                            <span class="k">Interest</span>
+                            <span class="v">
+                                @if($call->interests_count > 0)
+                                    {{ $call->interests_count }} logged
+                                @else
+                                    None logged
+                                @endif
+                            </span>
+                        </div>
+                        <div class="kv">
+                            <span class="k">Proposals</span>
+                            <span class="v">{{ $call->proposals_count }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @empty
+            <div class="card" style="grid-column:1/-1;">
+                <x-ui.empty icon="fa-bullhorn" title="No calls match">
+                    Nothing here yet. Calls posted by the GMU appear as cards, newest deadline first.
+                    <x-slot:action>
+                        @can('create', App\Models\FundingCall::class)
+                            <a href="{{ route('calls.create') }}" class="btn btn-primary">Post the first call</a>
+                        @endcan
+                    </x-slot:action>
+                </x-ui.empty>
+            </div>
+        @endforelse
+    </div>
+
+    <div class="pagination-wrap">{{ $calls->links() }}</div>
+</div>
 @endsection

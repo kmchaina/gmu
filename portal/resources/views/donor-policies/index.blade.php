@@ -1,112 +1,83 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', 'Donor Policies')
-
-@section('content_header')
-    <div class="d-flex justify-content-between align-items-center">
-        <h1><i class="fas fa-book mr-2"></i>Donor Policies & Guidelines</h1>
-        <a href="{{ route('donor-policies.create') }}" class="btn btn-primary">
-            <i class="fas fa-upload mr-1"></i> Upload Policy
-        </a>
-    </div>
-@endsection
+@section('title', 'Donor policies & guidelines')
+@section('crumb', 'Library')
 
 @section('content')
+<x-ui.page-head
+    title="Donor policies &amp; guidelines"
+    :lede="$policies->total() . ' ' . Str::plural('document', $policies->total()) . ' · what each funder requires, in one place'">
+    <x-slot:actions>
+        @can('create', App\Models\DonorPolicy::class)
+            <a href="{{ route('donor-policies.create') }}" class="btn btn-primary"><i class="fas fa-upload"></i> Upload</a>
+        @endcan
+    </x-slot:actions>
+</x-ui.page-head>
 
-<div class="card card-outline card-primary">
-    <div class="card-header"><h3 class="card-title"><i class="fas fa-filter mr-1"></i>Filter</h3></div>
-    <div class="card-body">
-        <form method="GET" action="{{ route('donor-policies.index') }}" class="form-inline flex-wrap" style="gap:10px;">
-            <input type="text" name="search" value="{{ request('search') }}"
-                   class="form-control form-control-sm" placeholder="Search title..." style="min-width:200px;">
-            <select name="donor_id" class="form-control form-control-sm">
-                <option value="">All Donors</option>
+<div class="stack">
+    <div class="row-between">
+        <div class="chips">
+            <a href="{{ route('donor-policies.index') }}" class="chip {{ ! request('policy_type') ? 'is-active' : '' }}">All</a>
+            @foreach(['grant_guidelines' => 'Guidelines', 'reporting_template' => 'Reporting templates', 'budget_template' => 'Budget templates', 'compliance_policy' => 'Compliance', 'other' => 'Other'] as $value => $label)
+                <a href="{{ route('donor-policies.index', ['policy_type' => $value]) }}"
+                   class="chip {{ request('policy_type') === $value ? 'is-active' : '' }}">{{ $label }}</a>
+            @endforeach
+        </div>
+        <form method="GET" class="row" style="gap:8px;">
+            <select name="donor_id" class="select" style="width:190px;" onchange="this.form.submit()">
+                <option value="">All donors</option>
                 @foreach($donors as $donor)
-                    <option value="{{ $donor->id }}" {{ request('donor_id') == $donor->id ? 'selected' : '' }}>
-                        {{ $donor->acronym ?? $donor->name }}
-                    </option>
+                    <option value="{{ $donor->id }}" @selected(request('donor_id') == $donor->id)>{{ $donor->acronym ?? $donor->name }}</option>
                 @endforeach
             </select>
-            <select name="policy_type" class="form-control form-control-sm">
-                <option value="">All Types</option>
-                <option value="grant_guidelines"    {{ request('policy_type') === 'grant_guidelines'    ? 'selected' : '' }}>Grant Guidelines</option>
-                <option value="reporting_template"  {{ request('policy_type') === 'reporting_template'  ? 'selected' : '' }}>Reporting Template</option>
-                <option value="budget_template"     {{ request('policy_type') === 'budget_template'     ? 'selected' : '' }}>Budget Template</option>
-                <option value="compliance_policy"   {{ request('policy_type') === 'compliance_policy'   ? 'selected' : '' }}>Compliance Policy</option>
-                <option value="other"               {{ request('policy_type') === 'other'               ? 'selected' : '' }}>Other</option>
-            </select>
-            <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-search mr-1"></i>Search</button>
-            <a href="{{ route('donor-policies.index') }}" class="btn btn-sm btn-default">Reset</a>
         </form>
     </div>
-</div>
 
-<div class="card">
-    <div class="card-header"><h3 class="card-title">{{ $policies->total() }} Policy Document(s)</h3></div>
-    <div class="card-body p-0">
-        @if($policies->isEmpty())
-            <div class="text-center text-muted py-5">
-                <i class="fas fa-book fa-3x mb-3"></i>
-                <h5>No policy documents found.</h5>
+    <div class="grid grid-cards">
+        @forelse($policies as $policy)
+            <div class="card">
+                <div class="card-body" style="display:flex; flex-direction:column; gap:14px;">
+                    <div class="row-between" style="align-items:flex-start;">
+                        <div>
+                            <div class="eyebrow">{{ $policy->donor?->acronym ?? $policy->donor?->name }}</div>
+                            <a href="{{ route('donor-policies.show', $policy) }}"
+                               style="display:block; margin-top:7px; font-size:14.5px; font-weight:600; line-height:1.35; color:var(--ink);">
+                                {{ $policy->title }}
+                            </a>
+                        </div>
+                        <x-ui.pill>v{{ $policy->version }}</x-ui.pill>
+                    </div>
+
+                    <div class="row" style="gap:10px;">
+                        <x-ui.pill tone="info">{{ Str::headline($policy->policy_type) }}</x-ui.pill>
+                        @if($policy->effective_date)
+                            <span class="tiny muted-3">Effective {{ $policy->effective_date->format('M Y') }}</span>
+                        @endif
+                    </div>
+
+                    @if($policy->notes)<p class="small muted">{{ Str::limit($policy->notes, 110) }}</p>@endif
+
+                    <div class="row-between" style="padding-top:12px; border-top:1px solid var(--line-soft);">
+                        <span class="tiny muted-3">{{ $policy->file_name }}</span>
+                        <div class="row" style="gap:6px;">
+                            <a href="{{ route('donor-policies.show', $policy) }}" class="btn btn-sm"><i class="fas fa-download"></i> Open</a>
+                            @can('update', $policy)
+                                <a href="{{ route('donor-policies.edit', $policy) }}" class="btn btn-sm"><i class="fas fa-pen"></i></a>
+                            @endcan
+                        </div>
+                    </div>
+                </div>
             </div>
-        @else
-        <table class="table table-hover table-bordered mb-0">
-            <thead class="thead-light">
-                <tr>
-                    <th>Title</th>
-                    <th>Donor</th>
-                    <th>Type</th>
-                    <th>Ver.</th>
-                    <th>Effective</th>
-                    <th>Uploaded By</th>
-                    <th width="80">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($policies as $policy)
-                @php
-                    $typeLabels = [
-                        'grant_guidelines'   => ['label' => 'Grant Guidelines',    'color' => 'primary'],
-                        'reporting_template' => ['label' => 'Reporting Template',  'color' => 'info'],
-                        'budget_template'    => ['label' => 'Budget Template',     'color' => 'success'],
-                        'compliance_policy'  => ['label' => 'Compliance Policy',   'color' => 'warning'],
-                        'other'              => ['label' => 'Other',               'color' => 'secondary'],
-                    ];
-                    $t = $typeLabels[$policy->policy_type] ?? ['label' => ucfirst($policy->policy_type), 'color' => 'secondary'];
-                @endphp
-                <tr>
-                    <td>
-                        <a href="{{ route('donor-policies.show', $policy) }}" target="_blank">
-                            <i class="fas fa-file mr-1 text-muted"></i>{{ $policy->title }}
-                        </a>
-                    </td>
-                    <td>
-                        <a href="{{ route('donors.show', $policy->donor) }}">
-                            <span class="badge badge-secondary">{{ $policy->donor->acronym ?? $policy->donor->name }}</span>
-                        </a>
-                    </td>
-                    <td><span class="badge badge-{{ $t['color'] }}">{{ $t['label'] }}</span></td>
-                    <td>v{{ $policy->version }}</td>
-                    <td>{{ $policy->effective_date ? $policy->effective_date->format('d M Y') : '-' }}</td>
-                    <td>{{ $policy->uploadedBy->name }}</td>
-                    <td>
-                        <a href="{{ route('donor-policies.show', $policy) }}" target="_blank"
-                           class="btn btn-xs btn-outline-primary" title="Download">
-                            <i class="fas fa-download"></i>
-                        </a>
-                        <a href="{{ route('donor-policies.edit', $policy) }}" class="btn btn-xs btn-outline-warning" title="Edit">
-                            <i class="fas fa-edit"></i>
-                        </a>
-                    </td>
-                </tr>
-                @endforeach
-            </tbody>
-        </table>
-        @endif
+        @empty
+            <div class="card" style="grid-column:1/-1;">
+                <x-ui.empty icon="fa-book" title="No guidelines filed">
+                    Donor guidelines, reporting and budget templates belong here — the reference a PI needs before
+                    writing, and the GMU needs before reviewing.
+                </x-ui.empty>
+            </div>
+        @endforelse
     </div>
-    @if($policies->hasPages())
-    <div class="card-footer">{{ $policies->links() }}</div>
-    @endif
-</div>
 
+    <div class="pagination-wrap">{{ $policies->links() }}</div>
+</div>
 @endsection

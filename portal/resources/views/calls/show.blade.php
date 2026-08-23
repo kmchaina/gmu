@@ -1,332 +1,188 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', $call->title)
-
-@section('content_header')
-    <div class="d-flex justify-content-between align-items-center">
-        <h1><i class="fas fa-bullhorn mr-2"></i>{{ Str::limit($call->title, 60) }}</h1>
-        <div>
-            @if(auth()->user()->hasAnyRole(['coordinator','planning_officer']))
-            <a href="{{ route('calls.edit', $call) }}" class="btn btn-warning">
-                <i class="fas fa-edit mr-1"></i>Edit
-            </a>
-            @endif
-            <a href="{{ route('calls.index') }}" class="btn btn-default ml-1">
-                <i class="fas fa-arrow-left mr-1"></i>Back
-            </a>
-        </div>
-    </div>
-@endsection
+@section('title', Str::limit($call->title, 40))
+@section('crumb', 'Funding call')
 
 @section('content')
-<div class="row">
+@php
+    $days = $call->days_until_deadline;
+    $tone = $call->status !== 'open' ? null : ($days <= 7 ? 'danger' : ($days <= 14 ? 'warn' : null));
+@endphp
 
-    {{-- Left: Call Details --}}
-    <div class="col-md-8">
+<div class="page-head">
+    <div style="min-width:0;">
+        <a href="{{ route('calls.index') }}" class="small">&larr; Funding calls</a>
+        <h1 style="margin-top:8px;">{{ $call->title }}</h1>
+        <div class="row" style="gap:12px; margin-top:10px;">
+            <x-ui.pill :tone="$tone">
+                {{ $call->status === 'open' ? ($days < 0 ? 'Deadline passed' : 'Closes in ' . $days . ' days') : ucfirst($call->status) }}
+            </x-ui.pill>
+            <span class="small muted">{{ $call->donor?->name }}@if($call->theme) · {{ $call->theme }}@endif</span>
+            @if($call->solicitation_number)<span class="mono small muted-3">{{ $call->solicitation_number }}</span>@endif
+        </div>
+    </div>
+    <div class="page-actions">
+        @if($call->call_document)
+            <a href="{{ route('calls.document', $call) }}" class="btn"><i class="fas fa-file-pdf"></i> Call document</a>
+        @endif
+        @can('update', $call)
+            <a href="{{ route('calls.edit', $call) }}" class="btn"><i class="fas fa-pen"></i> Edit</a>
+        @endcan
+        @can('create', App\Models\Proposal::class)
+            <a href="{{ route('proposals.create', ['funding_call_id' => $call->id]) }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Register a proposal
+            </a>
+        @endcan
+    </div>
+</div>
 
-        <div class="card card-outline card-primary">
-            <div class="card-header">
-                <h3 class="card-title">Call Information</h3>
-                <div class="card-tools">
-                    @if($call->status === 'open') <span class="badge badge-success badge-lg">Open</span>
-                    @elseif($call->status === 'closed') <span class="badge badge-danger badge-lg">Closed</span>
-                    @elseif($call->status === 'draft') <span class="badge badge-warning badge-lg">Draft</span>
-                    @else <span class="badge badge-secondary badge-lg">Archived</span>
-                    @endif
-                </div>
-            </div>
-            <div class="card-body">
-                <table class="table table-sm table-borderless">
-                    <tr>
-                        <th width="180" class="text-muted">Donor / Funder</th>
-                        <td><strong>{{ $call->donor->name }}</strong>
-                            @if($call->donor->acronym) ({{ $call->donor->acronym }}) @endif
-                        </td>
-                    </tr>
-                    @if($call->solicitation_number)
-                    <tr>
-                        <th class="text-muted">Reference No.</th>
-                        <td>{{ $call->solicitation_number }}</td>
-                    </tr>
-                    @endif
-                    @if($call->theme)
-                    <tr>
-                        <th class="text-muted">Theme / Area</th>
-                        <td><span class="badge badge-info">{{ $call->theme }}</span></td>
-                    </tr>
-                    @endif
-                    <tr>
-                        <th class="text-muted">Open Date</th>
-                        <td>{{ $call->open_date ? $call->open_date->format('d F Y') : 'Not specified' }}</td>
-                    </tr>
-                    <tr>
-                        <th class="text-muted">Submission Deadline</th>
-                        <td>
-                            <strong class="text-{{ $call->days_until_deadline <= 7 ? 'danger' : ($call->days_until_deadline <= 14 ? 'warning' : 'dark') }}">
-                                {{ $call->deadline->format('d F Y') }}
-                            </strong>
-                            @if($call->status === 'open')
-                                <span class="ml-2 badge badge-{{ $call->days_until_deadline <= 7 ? 'danger' : ($call->days_until_deadline <= 14 ? 'warning' : 'info') }}">
-                                    {{ $call->days_until_deadline }} days remaining
-                                </span>
-                            @endif
-                        </td>
-                    </tr>
-                    @if($call->estimated_budget)
-                    <tr>
-                        <th class="text-muted">Estimated Budget</th>
-                        <td>{{ number_format($call->estimated_budget, 2) }} {{ $call->currency }}</td>
-                    </tr>
-                    @endif
-                    <tr>
-                        <th class="text-muted">Initiation Type</th>
-                        <td>
-                            @if($call->initiation_type === 'gmu_posted')
-                                <span class="badge badge-primary">GMU Posted</span>
-                            @else
-                                <span class="badge badge-secondary">Researcher Initiated</span>
-                            @endif
-                        </td>
-                    </tr>
-                    <tr>
-                        <th class="text-muted">Posted By</th>
-                        <td>{{ $call->postedBy->name }} &bull; {{ $call->created_at->format('d M Y') }}</td>
-                    </tr>
-                </table>
+<div class="stack">
 
+    <div class="stats">
+        <x-ui.stat label="Deadline" :value="$call->deadline?->format('d M Y')"
+                   :note="$days < 0 ? abs($days) . ' days ago' : $days . ' days remaining'" :tone="$tone" />
+        <x-ui.stat label="Estimated budget"
+                   :value="$call->estimated_budget ? $call->currency . ' ' . number_format($call->estimated_budget, 0) : 'Not stated'"
+                   note="As advertised by the donor" />
+        <x-ui.stat label="Expressions of interest" :value="$call->interests->count()"
+                   :note="$call->interests->where('status', 'selected')->count() . ' selected'" />
+        <x-ui.stat label="Proposals" :value="$call->proposals->count()" note="Registered against this call" />
+    </div>
+
+    <div class="grid grid-wide">
+        <div class="stack">
+            <x-ui.card title="About this call">
                 @if($call->description)
-                <hr>
-                <h6 class="font-weight-bold">Description</h6>
-                <p>{{ $call->description }}</p>
+                    <p style="line-height:1.75; color:var(--muted);">{{ $call->description }}</p>
+                @else
+                    <p class="small muted-3">No description was recorded.</p>
                 @endif
 
                 @if($call->eligibility)
-                <hr>
-                <h6 class="font-weight-bold">Eligibility Requirements</h6>
-                <p>{{ $call->eligibility }}</p>
+                    <div class="divider"></div>
+                    <div class="eyebrow" style="margin-bottom:8px;">Eligibility</div>
+                    <p class="small" style="line-height:1.75; color:var(--muted);">{{ $call->eligibility }}</p>
                 @endif
+            </x-ui.card>
 
-                @if($call->call_document)
-                <hr>
-                <a href="{{ route('calls.document', $call) }}" target="_blank" class="btn btn-outline-primary">
-                    <i class="fas fa-file-pdf mr-1"></i> Download Call Document / Guidelines
-                </a>
-                @endif
-            </div>
-        </div>
-
-        {{-- Interested Researchers (GMU/Coordinator view) --}}
-        @if(auth()->user()->hasAnyRole(['coordinator','planning_officer']) && $call->interests->count() > 0)
-        <div class="card card-outline card-info">
-            <div class="card-header">
-                <h3 class="card-title">
-                    <i class="fas fa-users mr-1"></i>
-                    Interested Researchers ({{ $call->interests->count() }})
-                </h3>
-            </div>
-            <div class="card-body p-0">
-                <table class="table table-sm table-hover mb-0">
-                    <thead class="thead-light">
-                        <tr>
-                            <th><input type="checkbox" id="selectAll"></th>
-                            <th>Researcher</th>
-                            <th>Department</th>
-                            <th>Submitted</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach($call->interests as $interest)
-                        <tr>
-                            <td>
-                                <input type="checkbox" class="researcher-check" name="selected[]"
-                                       value="{{ $interest->user_id }}"
-                                       {{ $interest->status === 'selected' ? 'checked' : '' }}>
-                            </td>
-                            <td>
-                                <strong>{{ $interest->user->name }}</strong><br>
-                                <small class="text-muted">{{ $interest->user->role?->display_name }}</small>
-                            </td>
-                            <td>{{ $interest->user->department ?? '-' }}</td>
-                            <td>{{ $interest->created_at->format('d M Y') }}</td>
-                            <td>
-                                @if($interest->status === 'selected')
-                                    <span class="badge badge-success">Selected</span>
-                                @elseif($interest->status === 'not_selected')
-                                    <span class="badge badge-danger">Not Selected</span>
-                                @else
-                                    <span class="badge badge-warning">Pending</span>
-                                @endif
-                            </td>
-                        </tr>
-                        <tr class="bg-light">
-                            <td></td>
-                            <td colspan="4">
-                                <small>
-                                    <strong>Motivation:</strong> {{ $interest->motivation }}<br>
-                                    <strong>Experience:</strong> {{ $interest->relevant_experience }}
-                                </small>
-                            </td>
-                        </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-
-            {{-- Team Selection Form --}}
-            @if($call->status === 'open')
-            <div class="card-footer">
-                <form action="{{ route('calls.select-team', $call) }}" method="POST" id="selectionForm">
-                    @csrf
-                    <div class="row align-items-end">
-                        <div class="col-md-8">
-                            <label>GMU Notes (reason for selection)</label>
-                            <textarea name="gmu_notes" rows="2" class="form-control form-control-sm"
-                                      placeholder="Reason for team selection..."></textarea>
-                        </div>
-                        <div class="col-md-4">
-                            <button type="button" onclick="submitSelection()" class="btn btn-success btn-block mt-2">
-                                <i class="fas fa-check mr-1"></i>Save Team Selection
-                            </button>
-                        </div>
+            {{-- Expressions of interest --}}
+            @if($canSeeInterests || $userInterest)
+                <x-ui.card title="Expressions of interest"
+                           :note="$canSeeInterests ? 'Who has put themselves forward, and the GMU decision' : 'Your submission'"
+                           :flush="true">
+                    <div class="list">
+                        @forelse($call->interests as $interest)
+                            <div class="list-row" style="align-items:flex-start;">
+                                <div class="list-main">
+                                    <span class="list-title">{{ $interest->user?->name }}</span>
+                                    <span class="list-sub">{{ $interest->user?->department }}</span>
+                                    @if($interest->motivation)
+                                        <p class="small muted" style="margin-top:8px; line-height:1.65;">{{ $interest->motivation }}</p>
+                                    @endif
+                                    @if($interest->gmu_notes)
+                                        <p class="small" style="margin-top:6px; color:var(--muted-2);"><em>GMU note:</em> {{ $interest->gmu_notes }}</p>
+                                    @endif
+                                </div>
+                                <x-ui.pill :tone="$interest->status === 'selected' ? 'ok' : ($interest->status === 'not_selected' ? 'danger' : 'warn')">
+                                    {{ Str::headline($interest->status) }}
+                                </x-ui.pill>
+                            </div>
+                        @empty
+                            <x-ui.empty icon="fa-hand-paper">Nobody has expressed interest yet.</x-ui.empty>
+                        @endforelse
                     </div>
-                    <div id="hiddenInputs"></div>
-                </form>
-            </div>
+                </x-ui.card>
             @endif
-        </div>
-        @endif
 
-        {{-- Linked Proposals --}}
-        @if($call->proposals->count() > 0)
-        <div class="card card-outline card-success">
-            <div class="card-header">
-                <h3 class="card-title"><i class="fas fa-file-alt mr-1"></i>Proposals ({{ $call->proposals->count() }})</h3>
-            </div>
-            <div class="card-body p-0">
-                <table class="table table-sm mb-0">
-                    <thead class="thead-light">
-                        <tr><th>Title</th><th>Lead PI</th><th>Status</th><th></th></tr>
-                    </thead>
-                    <tbody>
-                        @foreach($call->proposals as $proposal)
-                        <tr>
-                            <td>{{ $proposal->title }}</td>
-                            <td>{{ $proposal->leadPi->name ?? '-' }}</td>
-                            <td><span class="badge badge-info">{{ ucfirst(str_replace('_',' ',$proposal->status)) }}</span></td>
-                            <td><a href="{{ route('proposals.show', $proposal) }}" class="btn btn-xs btn-outline-primary">View</a></td>
-                        </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        @endif
-
-    </div>
-
-    {{-- Right: Express Interest / Status --}}
-    <div class="col-md-4">
-
-        {{-- PI / Researcher: Express Interest --}}
-        @if(auth()->user()->hasAnyRole(['pi','research_scientist']) && $call->status === 'open')
-        <div class="card card-outline {{ $userInterest ? 'card-success' : 'card-warning' }}">
-            <div class="card-header">
-                <h3 class="card-title">
-                    @if($userInterest)
-                        <i class="fas fa-check-circle mr-1 text-success"></i>Your Application
-                    @else
-                        <i class="fas fa-hand-paper mr-1"></i>Express Interest
-                    @endif
-                </h3>
-            </div>
-            <div class="card-body">
-                @if($userInterest)
-                    <div class="alert alert-{{ $userInterest->status === 'selected' ? 'success' : ($userInterest->status === 'not_selected' ? 'danger' : 'warning') }} mb-0">
-                        @if($userInterest->status === 'selected')
-                            <i class="fas fa-check-circle mr-1"></i>
-                            <strong>Congratulations!</strong> You have been selected for this proposal.
-                        @elseif($userInterest->status === 'not_selected')
-                            <i class="fas fa-times-circle mr-1"></i>
-                            You were not selected for this call. The GMU will inform you of future opportunities.
-                        @else
-                            <i class="fas fa-clock mr-1"></i>
-                            Your interest has been submitted and is under GMU review.
-                        @endif
-                    </div>
-                    @if($userInterest->gmu_notes)
-                        <p class="mt-2 text-muted small"><strong>GMU Note:</strong> {{ $userInterest->gmu_notes }}</p>
-                    @endif
-                @else
-                    <p class="text-muted">Indicate your interest in applying for this grant. The GMU team will review all applicants and select the most suitable team.</p>
-                    <form action="{{ route('calls.interest', $call) }}" method="POST">
-                        @csrf
-                        <div class="form-group">
-                            <label>Why are you interested? <span class="text-danger">*</span></label>
-                            <textarea name="motivation" rows="3" class="form-control @error('motivation') is-invalid @enderror"
-                                      placeholder="Describe why this call aligns with your research... (min 50 characters)"
-                                      required minlength="50">{{ old('motivation') }}</textarea>
-                            @error('motivation')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                        <div class="form-group">
-                            <label>Relevant Experience <span class="text-danger">*</span></label>
-                            <textarea name="relevant_experience" rows="3" class="form-control @error('relevant_experience') is-invalid @enderror"
-                                      placeholder="Your relevant publications, projects, expertise... (min 30 characters)"
-                                      required minlength="30">{{ old('relevant_experience') }}</textarea>
-                            @error('relevant_experience')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                        <button type="submit" class="btn btn-warning btn-block">
-                            <i class="fas fa-paper-plane mr-1"></i>Submit Interest
-                        </button>
-                    </form>
+            {{-- Team selection --}}
+            @can('selectTeam', $call)
+                @if($call->interests->isNotEmpty())
+                    <x-ui.card title="Select the team" note="NIMR submits one proposal per call — choose who takes it forward">
+                        <form method="POST" action="{{ route('calls.select-team', $call) }}">
+                            @csrf
+                            <div class="stack-sm">
+                                @foreach($call->interests as $interest)
+                                    <label class="check">
+                                        <input type="checkbox" name="selected_user_ids[]" value="{{ $interest->user_id }}"
+                                               @checked($interest->status === 'selected')>
+                                        <span>{{ $interest->user?->name }} <span class="muted-3">— {{ $interest->user?->department }}</span></span>
+                                    </label>
+                                @endforeach
+                            </div>
+                            <x-ui.field label="Note to those selected" name="gmu_notes" class="wide">
+                                <textarea name="gmu_notes" rows="2" class="textarea" style="margin-top:14px;"></textarea>
+                            </x-ui.field>
+                            <div class="form-actions"><button class="btn btn-primary">Save selection and notify</button></div>
+                        </form>
+                    </x-ui.card>
                 @endif
-            </div>
-        </div>
-        @endif
+            @endcan
 
-        {{-- Call Stats Box --}}
-        <div class="card">
-            <div class="card-header"><h3 class="card-title">Quick Stats</h3></div>
-            <div class="card-body p-0">
-                <ul class="list-group list-group-flush">
-                    <li class="list-group-item d-flex justify-content-between">
-                        <span>Interested Researchers</span>
-                        <strong>{{ $call->interests->count() }}</strong>
-                    </li>
-                    <li class="list-group-item d-flex justify-content-between">
-                        <span>Selected</span>
-                        <strong class="text-success">{{ $call->interests->where('status','selected')->count() }}</strong>
-                    </li>
-                    <li class="list-group-item d-flex justify-content-between">
-                        <span>Linked Proposals</span>
-                        <strong>{{ $call->proposals->count() }}</strong>
-                    </li>
-                </ul>
-            </div>
+            {{-- Proposals against this call --}}
+            <x-ui.card title="Proposals" :flush="true">
+                <div class="list">
+                    @forelse($call->proposals as $proposal)
+                        <a href="{{ route('proposals.show', $proposal) }}" class="list-row">
+                            <div class="list-main">
+                                <span class="list-title">{{ $proposal->title }}</span>
+                                <span class="list-sub">Registered {{ $proposal->created_at?->format('d M Y') }}</span>
+                            </div>
+                            <x-ui.pill>{{ Str::headline($proposal->status) }}</x-ui.pill>
+                        </a>
+                    @empty
+                        <x-ui.empty icon="fa-file-alt">No proposal registered against this call yet.</x-ui.empty>
+                    @endforelse
+                </div>
+            </x-ui.card>
         </div>
 
+        <div class="stack">
+            @can('expressInterest', $call)
+                <x-ui.card title="Express interest" note="Tell the GMU you intend to apply">
+                    @if($userInterest)
+                        <x-ui.pill :tone="$userInterest->status === 'selected' ? 'ok' : ($userInterest->status === 'not_selected' ? 'danger' : 'warn')">
+                            {{ Str::headline($userInterest->status) }}
+                        </x-ui.pill>
+                        <p class="small muted" style="margin-top:12px; line-height:1.7;">
+                            You expressed interest on {{ $userInterest->created_at?->format('d M Y') }}.
+                            @if($userInterest->status === 'pending') The GMU will confirm the team shortly. @endif
+                        </p>
+                    @endif
+
+                    <form method="POST" action="{{ route('calls.interest', $call) }}" style="margin-top:{{ $userInterest ? '16px' : '0' }};">
+                        @csrf
+                        <x-ui.field label="Why this call fits your work" name="motivation" help="At least 50 characters">
+                            <textarea name="motivation" rows="3" class="textarea" required>{{ old('motivation', $userInterest?->motivation) }}</textarea>
+                        </x-ui.field>
+                        <x-ui.field label="Relevant experience" name="relevant_experience" help="At least 30 characters">
+                            <textarea name="relevant_experience" rows="3" class="textarea" required>{{ old('relevant_experience', $userInterest?->relevant_experience) }}</textarea>
+                        </x-ui.field>
+                        <div class="form-actions">
+                            <button class="btn btn-primary btn-block">{{ $userInterest ? 'Update my submission' : 'Express interest' }}</button>
+                        </div>
+                    </form>
+                </x-ui.card>
+            @endcan
+
+            <x-ui.card title="Call details">
+                <div class="stack-sm small">
+                    <div class="row-between"><span class="muted">Donor</span><span>{{ $call->donor?->name }}</span></div>
+                    <div class="row-between"><span class="muted">Theme</span><span>{{ $call->theme ?? '—' }}</span></div>
+                    <div class="row-between"><span class="muted">Opened</span><span>{{ $call->open_date?->format('d M Y') ?? '—' }}</span></div>
+                    <div class="row-between"><span class="muted">Deadline</span><span>{{ $call->deadline?->format('d M Y') }}</span></div>
+                    <div class="row-between"><span class="muted">Origin</span><span>{{ Str::headline($call->initiation_type) }}</span></div>
+                    <div class="row-between"><span class="muted">Posted by</span><span>{{ $call->postedBy?->name }}</span></div>
+                </div>
+            </x-ui.card>
+
+            @can('view-analytics')
+                <x-ui.card title="Who fits this call?" note="Rule-based matching across active researchers">
+                    <a href="{{ route('ai.match-call', $call) }}" class="btn btn-block">
+                        <i class="fas fa-robot"></i> Score researchers
+                    </a>
+                </x-ui.card>
+            @endcan
+        </div>
     </div>
 </div>
-@endsection
-
-@section('js')
-<script>
-document.getElementById('selectAll')?.addEventListener('change', function(){
-    document.querySelectorAll('.researcher-check').forEach(cb => cb.checked = this.checked);
-});
-
-function submitSelection(){
-    const form = document.getElementById('selectionForm');
-    const container = document.getElementById('hiddenInputs');
-    container.innerHTML = '';
-    document.querySelectorAll('.researcher-check:checked').forEach(cb => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'selected_user_ids[]';
-        input.value = cb.value;
-        container.appendChild(input);
-    });
-    form.submit();
-}
-</script>
 @endsection

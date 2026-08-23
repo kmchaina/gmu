@@ -1,69 +1,99 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', 'AI Intelligence Hub')
-
-@section('content_header')
-    <h1><i class="fas fa-robot mr-2"></i>AI Intelligence Hub</h1>
-@endsection
+@section('title', 'AI intelligence hub')
+@section('crumb', 'Intelligence')
 
 @section('content')
+<x-ui.page-head
+    title="AI intelligence hub"
+    lede="Scoring and risk analysis run on rules the unit can inspect. Written summaries are added when a language model is configured — never the other way round.">
+    <x-slot:actions>
+        <x-ui.pill :tone="$llmActive ? 'ok' : null">
+            <i class="fas {{ $llmActive ? 'fa-circle-check' : 'fa-circle-minus' }}"></i>
+            {{ $llmActive ? 'Language model active' : 'Rule-based only' }}
+        </x-ui.pill>
+    </x-slot:actions>
+</x-ui.page-head>
 
-<div class="alert alert-{{ $llmActive ? 'success' : 'info' }}">
-    <i class="fas fa-{{ $llmActive ? 'check-circle' : 'info-circle' }} mr-2"></i>
-    <strong>AI Provider:</strong> {{ $providerName }}
-    @if(!$llmActive)
-        &mdash; Rule-based analysis is active. Set <code>ANTHROPIC_API_KEY</code> in <code>.env</code> to enable AI-generated narratives and proposal drafting.
-    @endif
-</div>
+<div class="stack">
 
-<div class="row">
-    <div class="col-md-4">
-        <div class="card card-outline card-primary h-100">
-            <div class="card-body text-center py-4">
-                <i class="fas fa-users fa-3x text-primary mb-3"></i>
-                <h4>Grant Matching</h4>
-                <p class="text-muted">Score and rank researchers against open funding calls based on expertise, track record, qualifications, and budget fit.</p>
-                <a href="{{ route('ai.matching') }}" class="btn btn-primary">
-                    <i class="fas fa-search mr-1"></i>Find Matches
-                </a>
+    @unless($llmActive)
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i>
+            <div>
+                <strong>No language model is configured.</strong>
+                Matching scores and risk flags below still work in full — they are computed from your own data by rules
+                in the codebase. Setting <span class="mono">ANTHROPIC_API_KEY</span> adds a written summary on top;
+                nothing depends on it.
             </div>
         </div>
+    @endunless
+
+    <div class="grid grid-2">
+        <x-ui.card title="Grant matching" note="Which researchers fit a call, and why">
+            <p class="small muted" style="line-height:1.7;">
+                Every active researcher is scored against a call out of 100: expertise against the theme,
+                funded track record, relevant qualifications, publications, budget fit, and whether any
+                conflict-of-interest disclosure is outstanding. The breakdown is shown per researcher, so the
+                Coordinator can see the reasoning rather than a number.
+            </p>
+            <div class="form-actions" style="margin-top:16px;">
+                <a href="{{ route('ai.matching') }}" class="btn btn-primary">Match researchers to a call</a>
+            </div>
+        </x-ui.card>
+
+        <x-ui.card title="Compliance risk analysis" note="What is going wrong on an award, ranked">
+            <p class="small muted" style="line-height:1.7;">
+                Reads an award end to end — overdue and upcoming reports, compliance deliverables, ethics expiry,
+                burn rate against the period remaining, and the closeout window — and returns flags ranked high,
+                medium and low, each naming the record it came from.
+            </p>
+            <div class="form-actions" style="margin-top:16px;">
+                <a href="{{ route('ai.risk') }}" class="btn btn-primary">Analyse an award</a>
+            </div>
+        </x-ui.card>
     </div>
 
-    <div class="col-md-4">
-        <div class="card card-outline card-danger h-100">
-            <div class="card-body text-center py-4">
-                <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
-                <h4>Compliance Risk Analysis</h4>
-                <p class="text-muted">Scan active awards for overdue reports, expiring ethics protocols, budget over-runs, and upcoming compliance events.</p>
-                <a href="{{ route('ai.risk') }}" class="btn btn-danger">
-                    <i class="fas fa-shield-alt mr-1"></i>Analyse Risk
-                </a>
-            </div>
-        </div>
+    <div class="grid grid-2">
+        <x-ui.card title="Report quality check" note="Available from a report page">
+            <p class="small muted" style="line-height:1.7;">
+                Checks a draft narrative before it goes to the donor: length, whether it contains quantitative
+                results, and whether it covers objectives, results, challenges and next steps. With a model
+                configured it adds three specific suggestions.
+            </p>
+        </x-ui.card>
+
+        <x-ui.card title="Proposal drafting" note="Available while writing a proposal">
+            <p class="small muted" style="line-height:1.7;">
+                Drafts an abstract, background, objectives, methodology or impact section from the context you give
+                it, as a starting point for the PI to work from. This one needs a configured model — there is no
+                rule-based equivalent.
+            </p>
+            @unless($llmActive)
+                <p class="small text-warn" style="margin-top:12px;">Unavailable until a model is configured.</p>
+            @endunless
+        </x-ui.card>
     </div>
 
-    <div class="col-md-4">
-        <div class="card card-outline card-success h-100">
-            <div class="card-body text-center py-4">
-                <i class="fas fa-pen-fancy fa-3x text-success mb-3"></i>
-                <h4>Proposal Drafting</h4>
-                <p class="text-muted">
-                    @if($llmActive)
-                        AI-powered drafting of proposal sections: abstract, background, objectives, methodology, and impact.
-                    @else
-                        Requires AI provider. Configure <code>ANTHROPIC_API_KEY</code> to enable this feature.
-                    @endif
-                </p>
-                @if($llmActive)
-                    <a href="{{ route('proposals.create') }}" class="btn btn-success">
-                        <i class="fas fa-file-alt mr-1"></i>New Proposal
-                    </a>
-                @else
-                    <button class="btn btn-secondary" disabled>Not Available</button>
-                @endif
+    <x-ui.card title="How this is wired" note="For whoever maintains the system">
+        <div class="stack-sm small muted" style="line-height:1.7;">
+            <div class="row-between">
+                <span>Provider</span>
+                <span class="mono">{{ $providerName }}</span>
+            </div>
+            <div class="row-between">
+                <span>Behaviour without a key</span>
+                <span>Rule-based engines run; written summaries are skipped</span>
+            </div>
+            <div class="row-between">
+                <span>Rate limit</span>
+                <span>20 requests per user per minute</span>
+            </div>
+            <div class="row-between">
+                <span>Data sent</span>
+                <span>Only the text of the record being analysed</span>
             </div>
         </div>
-    </div>
+    </x-ui.card>
 </div>
 @endsection

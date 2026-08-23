@@ -1,192 +1,118 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', 'Edit Award')
-
-@section('content_header')
-    <div class="d-flex justify-content-between align-items-center">
-        <h1><i class="fas fa-edit mr-2"></i>Edit Award</h1>
-        <a href="{{ route('awards.show', $award) }}" class="btn btn-default"><i class="fas fa-arrow-left mr-1"></i>Back</a>
-    </div>
-@endsection
+@section('title', 'Edit award')
+@section('crumb', 'Awards & compliance')
 
 @section('content')
+<x-ui.page-head title="Edit award" :lede="$award->contract_number . ' · ' . $award->title">
+    <x-slot:actions>
+        <a href="{{ route('awards.show', $award) }}" class="btn">View award</a>
+    </x-slot:actions>
+</x-ui.page-head>
 
-<form action="{{ route('awards.update', $award) }}" method="POST" enctype="multipart/form-data">
-@csrf
-@method('PUT')
+<form method="POST" action="{{ route('awards.update', $award) }}" enctype="multipart/form-data">
+    @csrf @method('PUT')
 
-<div class="row">
-    <div class="col-md-8">
+    <div class="grid grid-wide">
+        <div class="stack">
+            <x-ui.card title="The contract">
+                <div class="form-grid">
+                    <x-ui.field label="Award title" name="title" required wide>
+                        <input name="title" class="input" value="{{ old('title', $award->title) }}" required maxlength="255">
+                    </x-ui.field>
 
-        <div class="card card-outline card-success">
-            <div class="card-header"><h3 class="card-title">Award Details</h3></div>
-            <div class="card-body">
+                    <x-ui.field label="Contract number" name="contract_number" required>
+                        <input name="contract_number" class="input mono" value="{{ old('contract_number', $award->contract_number) }}" required>
+                    </x-ui.field>
 
-                <div class="form-group">
-                    <label class="text-muted">Linked Proposal</label>
-                    <p class="form-control-plaintext">
-                        <a href="{{ route('proposals.show', $award->proposal) }}">{{ $award->proposal->title }}</a>
-                        — {{ $award->proposal->leadPi->name ?? '-' }}
-                    </p>
+                    <x-ui.field label="Total budget" name="total_budget" required
+                                help="For a donor-approved change, record an amendment instead — it keeps the history">
+                        <input type="number" step="0.01" min="0" name="total_budget" class="input"
+                               value="{{ old('total_budget', $award->total_budget) }}" required>
+                    </x-ui.field>
+
+                    <x-ui.field label="Currency" name="currency" required>
+                        <select name="currency" class="select" required>
+                            @foreach(\App\Support\Money::supported() as $code)
+                                <option value="{{ $code }}" @selected(old('currency', $award->currency) === $code)>{{ $code }}</option>
+                            @endforeach
+                        </select>
+                    </x-ui.field>
+
+                    <x-ui.field label="Notes" name="notes" wide>
+                        <textarea name="notes" rows="3" class="textarea">{{ old('notes', $award->notes) }}</textarea>
+                    </x-ui.field>
                 </div>
+            </x-ui.card>
 
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label>Donor <span class="text-danger">*</span></label>
-                            <select name="donor_id" class="form-control select2 @error('donor_id') is-invalid @enderror">
-                                @foreach($donors as $donor)
-                                    <option value="{{ $donor->id }}" {{ old('donor_id', $award->donor_id) == $donor->id ? 'selected' : '' }}>
-                                        {{ $donor->name }} @if($donor->acronym)({{ $donor->acronym }})@endif
-                                    </option>
-                                @endforeach
-                            </select>
-                            @error('donor_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label>Contract / Grant Number <span class="text-danger">*</span></label>
-                            <input type="text" name="contract_number" value="{{ old('contract_number', $award->contract_number) }}"
-                                   class="form-control @error('contract_number') is-invalid @enderror">
-                            @error('contract_number')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                    </div>
+            <x-ui.card title="Period and reporting">
+                <div class="form-grid">
+                    <x-ui.field label="Start date" name="start_date" required>
+                        <input type="date" name="start_date" class="input" value="{{ old('start_date', $award->start_date?->toDateString()) }}" required>
+                    </x-ui.field>
+
+                    <x-ui.field label="End date" name="end_date" required>
+                        <input type="date" name="end_date" class="input" value="{{ old('end_date', $award->end_date?->toDateString()) }}" required>
+                    </x-ui.field>
+
+                    <x-ui.field label="Kickoff briefing" name="kickoff_date">
+                        <input type="date" name="kickoff_date" class="input" value="{{ old('kickoff_date', $award->kickoff_date?->toDateString()) }}">
+                    </x-ui.field>
+
+                    <x-ui.field label="Reporting frequency" name="reporting_frequency" required>
+                        <select name="reporting_frequency" class="select" required>
+                            @foreach(\App\Services\ComplianceScheduleGenerator::frequencies() as $value => $label)
+                                <option value="{{ $value }}" @selected(old('reporting_frequency', $award->reporting_frequency) === $value)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </x-ui.field>
                 </div>
-
-                <div class="form-group">
-                    <label>Project Title <span class="text-danger">*</span></label>
-                    <input type="text" name="title" value="{{ old('title', $award->title) }}"
-                           class="form-control @error('title') is-invalid @enderror">
-                    @error('title')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                </div>
-
-                <div class="form-group">
-                    <label>Notes</label>
-                    <textarea name="notes" rows="3" class="form-control">{{ old('notes', $award->notes) }}</textarea>
-                </div>
-
-            </div>
+            </x-ui.card>
         </div>
 
-        <div class="card card-outline card-info">
-            <div class="card-header"><h3 class="card-title">Budget & Duration</h3></div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-5">
-                        <div class="form-group">
-                            <label>Total Budget <span class="text-danger">*</span></label>
-                            <input type="number" name="total_budget" value="{{ old('total_budget', $award->total_budget) }}"
-                                   class="form-control @error('total_budget') is-invalid @enderror"
-                                   step="0.01" min="0">
-                            @error('total_budget')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label>Currency</label>
-                            <select name="currency" class="form-control">
-                                <option value="USD" {{ old('currency', $award->currency) === 'USD' ? 'selected' : '' }}>USD</option>
-                                <option value="EUR" {{ old('currency', $award->currency) === 'EUR' ? 'selected' : '' }}>EUR</option>
-                                <option value="GBP" {{ old('currency', $award->currency) === 'GBP' ? 'selected' : '' }}>GBP</option>
-                                <option value="TZS" {{ old('currency', $award->currency) === 'TZS' ? 'selected' : '' }}>TZS</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label>Start Date <span class="text-danger">*</span></label>
-                            <input type="date" name="start_date"
-                                   value="{{ old('start_date', $award->start_date->format('Y-m-d')) }}"
-                                   class="form-control @error('start_date') is-invalid @enderror">
-                            @error('start_date')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label>End Date <span class="text-danger">*</span></label>
-                            <input type="date" name="end_date"
-                                   value="{{ old('end_date', $award->end_date->format('Y-m-d')) }}"
-                                   class="form-control @error('end_date') is-invalid @enderror">
-                            @error('end_date')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label>Kickoff Date</label>
-                            <input type="date" name="kickoff_date"
-                                   value="{{ old('kickoff_date', $award->kickoff_date?->format('Y-m-d')) }}"
-                                   class="form-control">
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <div class="stack">
+            <x-ui.card title="Status and contract file">
+                <div class="stack-sm">
+                    <x-ui.field label="Status" name="status" required>
+                        <select name="status" class="select" required>
+                            @foreach(['active' => 'Active', 'suspended' => 'Suspended', 'completed' => 'Completed', 'terminated' => 'Terminated'] as $value => $label)
+                                <option value="{{ $value }}" @selected(old('status', $award->status) === $value)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </x-ui.field>
 
-    </div>
-
-    <div class="col-md-4">
-
-        <div class="card card-outline card-secondary">
-            <div class="card-header"><h3 class="card-title">Settings</h3></div>
-            <div class="card-body">
-
-                <div class="form-group">
-                    <label>Status</label>
-                    <select name="status" class="form-control">
-                        <option value="active"     {{ old('status', $award->status) === 'active'     ? 'selected' : '' }}>Active</option>
-                        <option value="suspended"  {{ old('status', $award->status) === 'suspended'  ? 'selected' : '' }}>Suspended</option>
-                        <option value="completed"  {{ old('status', $award->status) === 'completed'  ? 'selected' : '' }}>Completed</option>
-                        <option value="terminated" {{ old('status', $award->status) === 'terminated' ? 'selected' : '' }}>Terminated</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>Reporting Frequency</label>
-                    <select name="reporting_frequency" class="form-control">
-                        @foreach(\App\Services\ComplianceScheduleGenerator::frequencies() as $value => $label)
-                            <option value="{{ $value }}" {{ old('reporting_frequency', $award->reporting_frequency) === $value ? 'selected' : '' }}>{{ $label }}</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>Replace Signed Contract</label>
-                    @if($award->signed_contract)
-                        <div class="mb-2">
-                            <a href="{{ route('awards.contract', $award) }}" target="_blank" class="btn btn-sm btn-outline-info">
-                                <i class="fas fa-file mr-1"></i>Current Contract
+                    <x-ui.field label="Replace signed contract" name="signed_contract">
+                        @if($award->signed_contract)
+                            <a href="{{ route('awards.contract', $award) }}" class="btn btn-sm" style="margin-bottom:8px;">
+                                <i class="fas fa-file-contract"></i> Current contract
                             </a>
-                        </div>
-                    @endif
-                    <div class="custom-file">
-                        <input type="file" name="signed_contract" class="custom-file-input" id="contractFile"
-                               accept=".pdf,.doc,.docx">
-                        <label class="custom-file-label" for="contractFile">Choose file</label>
-                    </div>
+                        @endif
+                        <input type="file" name="signed_contract" class="input" accept=".pdf,.doc,.docx">
+                    </x-ui.field>
                 </div>
+            </x-ui.card>
 
-            </div>
+            <x-ui.card>
+                <div class="form-actions">
+                    <button class="btn btn-primary">Save changes</button>
+                    <a href="{{ route('awards.show', $award) }}" class="btn">Cancel</a>
+                </div>
+            </x-ui.card>
+
+            @can('delete', $award)
+                <x-ui.card title="Remove this award" accent="danger">
+                    <p class="small muted" style="line-height:1.7;">
+                        Soft-deletes the award. Reports, budgets and compliance records stay in the database.
+                        Prefer marking it terminated, which keeps it visible.
+                    </p>
+                    <form method="POST" action="{{ route('awards.destroy', $award) }}"
+                          onsubmit="return confirm('Remove this award?')" style="margin-top:12px;">
+                        @csrf @method('DELETE')
+                        <button class="btn btn-danger btn-block">Remove award</button>
+                    </form>
+                </x-ui.card>
+            @endcan
         </div>
-
-        <button type="submit" class="btn btn-primary btn-block btn-lg">
-            <i class="fas fa-save mr-1"></i> Save Changes
-        </button>
-        <a href="{{ route('awards.show', $award) }}" class="btn btn-default btn-block">Cancel</a>
-
     </div>
-</div>
-
 </form>
-
-@endsection
-
-@section('js')
-<script>
-document.querySelector('#contractFile')?.addEventListener('change', function(){
-    this.nextElementSibling.textContent = this.files[0]?.name || 'Choose file';
-});
-</script>
 @endsection

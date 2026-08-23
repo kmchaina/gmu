@@ -1,121 +1,73 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', 'Donors & Funders')
-
-@section('content_header')
-    <div class="d-flex justify-content-between align-items-center">
-        <h1><i class="fas fa-building mr-2"></i>Donors & Funders</h1>
-        <a href="{{ route('donors.create') }}" class="btn btn-primary">
-            <i class="fas fa-plus mr-1"></i> Add Donor
-        </a>
-    </div>
-@endsection
+@section('title', 'Donors & funders')
+@section('crumb', 'Grant opportunities')
 
 @section('content')
+<x-ui.page-head
+    title="Donors &amp; funders"
+    :lede="$donors->total() . ' ' . Str::plural('funder', $donors->total()) . ' on record · calls, awards and the guidelines that go with them'">
+    <x-slot:actions>
+        @can('create', App\Models\Donor::class)
+            <a href="{{ route('donors.create') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add a donor</a>
+        @endcan
+    </x-slot:actions>
+</x-ui.page-head>
 
-{{-- Filters --}}
-<div class="card card-outline card-primary">
-    <div class="card-header"><h3 class="card-title"><i class="fas fa-filter mr-1"></i>Filter</h3></div>
-    <div class="card-body">
-        <form method="GET" action="{{ route('donors.index') }}" class="form-inline flex-wrap" style="gap:10px;">
-            <input type="text" name="search" value="{{ request('search') }}"
-                   class="form-control form-control-sm" placeholder="Search name, acronym, country..." style="min-width:240px;">
-            <select name="type" class="form-control form-control-sm">
-                <option value="">All Types</option>
-                <option value="bilateral"     {{ request('type') === 'bilateral'     ? 'selected' : '' }}>Bilateral</option>
-                <option value="multilateral"  {{ request('type') === 'multilateral'  ? 'selected' : '' }}>Multilateral</option>
-                <option value="foundation"    {{ request('type') === 'foundation'    ? 'selected' : '' }}>Foundation</option>
-                <option value="government"    {{ request('type') === 'government'    ? 'selected' : '' }}>Government</option>
-                <option value="private"       {{ request('type') === 'private'       ? 'selected' : '' }}>Private</option>
-                <option value="other"         {{ request('type') === 'other'         ? 'selected' : '' }}>Other</option>
-            </select>
-            <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-search mr-1"></i>Search</button>
-            <a href="{{ route('donors.index') }}" class="btn btn-sm btn-default">Reset</a>
+<div class="stack">
+    <div class="row-between">
+        <div class="chips">
+            <a href="{{ route('donors.index') }}" class="chip {{ ! request('type') ? 'is-active' : '' }}">All</a>
+            @foreach(['bilateral' => 'Bilateral', 'multilateral' => 'Multilateral', 'foundation' => 'Foundation', 'government' => 'Government', 'private' => 'Private', 'other' => 'Other'] as $value => $label)
+                <a href="{{ route('donors.index', ['type' => $value]) }}" class="chip {{ request('type') === $value ? 'is-active' : '' }}">{{ $label }}</a>
+            @endforeach
+        </div>
+        <form method="GET" class="row" style="gap:8px;">
+            <input type="search" name="search" class="input" style="width:220px;" placeholder="Name, acronym or country" value="{{ request('search') }}">
+            <button class="btn"><i class="fas fa-search"></i></button>
         </form>
     </div>
-</div>
 
-{{-- Donors Table --}}
-<div class="card">
-    <div class="card-header">
-        <h3 class="card-title">{{ $donors->total() }} Donor(s)</h3>
-    </div>
-    <div class="card-body p-0">
-        @if($donors->isEmpty())
-            <div class="text-center text-muted py-5">
-                <i class="fas fa-building fa-3x mb-3"></i>
-                <h5>No donors found.</h5>
-                <a href="{{ route('donors.create') }}" class="btn btn-primary mt-2">Add First Donor</a>
-            </div>
-        @else
-        <table class="table table-hover table-bordered mb-0">
-            <thead class="thead-light">
-                <tr>
-                    <th width="40">#</th>
-                    <th>Name</th>
-                    <th>Acronym</th>
-                    <th>Type</th>
-                    <th>Country</th>
-                    <th class="text-center" width="80">Calls</th>
-                    <th class="text-center" width="80">Awards</th>
-                    <th width="100">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($donors as $i => $donor)
-                <tr>
-                    <td>{{ $donors->firstItem() + $i }}</td>
-                    <td>
-                        <a href="{{ route('donors.show', $donor) }}" class="font-weight-bold text-dark">
-                            {{ $donor->name }}
-                        </a>
-                    </td>
-                    <td>
-                        @if($donor->acronym)
-                            <span class="badge badge-secondary">{{ $donor->acronym }}</span>
-                        @else
-                            <span class="text-muted">-</span>
+    <div class="grid grid-cards">
+        @forelse($donors as $donor)
+            <div class="card">
+                <div class="card-body" style="display:flex; flex-direction:column; gap:16px;">
+                    <div class="row-between" style="align-items:flex-start;">
+                        <div style="min-width:0;">
+                            <div class="eyebrow">{{ Str::headline($donor->type) }}@if($donor->country) · {{ $donor->country }}@endif</div>
+                            <a href="{{ route('donors.show', $donor) }}"
+                               style="display:block; margin-top:7px; font-size:15px; font-weight:600; letter-spacing:-.2px; line-height:1.35; color:var(--ink);">
+                                {{ $donor->name }}
+                            </a>
+                            @if($donor->acronym)<div class="tiny mono muted-3" style="margin-top:5px;">{{ $donor->acronym }}</div>@endif
+                        </div>
+                        @can('update', $donor)
+                            <a href="{{ route('donors.edit', $donor) }}" class="btn btn-sm"><i class="fas fa-pen"></i></a>
+                        @endcan
+                    </div>
+
+                    <div class="row-between" style="padding-top:14px; border-top:1px solid var(--line-soft);">
+                        <div class="kv"><span class="k">Calls</span><span class="v">{{ $donor->funding_calls_count }}</span></div>
+                        <div class="kv"><span class="k">Awards</span><span class="v">{{ $donor->awards_count }}</span></div>
+                        <div class="kv"><span class="k">Guidelines</span><span class="v">{{ $donor->policies_count }}</span></div>
+                        @if($donor->contact_email)
+                            <div class="kv"><span class="k">Contact</span><span class="v small">{{ Str::limit($donor->contact_email, 18) }}</span></div>
                         @endif
-                    </td>
-                    <td>
-                        @php
-                            $typeColors = [
-                                'bilateral'    => 'primary',
-                                'multilateral' => 'info',
-                                'foundation'   => 'success',
-                                'government'   => 'warning',
-                                'private'      => 'secondary',
-                                'other'        => 'light',
-                            ];
-                        @endphp
-                        <span class="badge badge-{{ $typeColors[$donor->type] ?? 'secondary' }}">
-                            {{ ucfirst($donor->type) }}
-                        </span>
-                    </td>
-                    <td>{{ $donor->country ?? '-' }}</td>
-                    <td class="text-center">
-                        <span class="badge badge-info">{{ $donor->funding_calls_count }}</span>
-                    </td>
-                    <td class="text-center">
-                        <span class="badge badge-success">{{ $donor->awards_count }}</span>
-                    </td>
-                    <td>
-                        <a href="{{ route('donors.show', $donor) }}" class="btn btn-xs btn-outline-primary" title="View">
-                            <i class="fas fa-eye"></i>
-                        </a>
-                        <a href="{{ route('donors.edit', $donor) }}" class="btn btn-xs btn-outline-warning" title="Edit">
-                            <i class="fas fa-edit"></i>
-                        </a>
-                    </td>
-                </tr>
-                @endforeach
-            </tbody>
-        </table>
-        @endif
+                    </div>
+                </div>
+            </div>
+        @empty
+            <div class="card" style="grid-column:1/-1;">
+                <x-ui.empty icon="fa-handshake" title="No donors recorded">
+                    Every call and every award is attached to a funder. Add them here first.
+                    <x-slot:action>
+                        <a href="{{ route('donors.create') }}" class="btn btn-primary">Add the first donor</a>
+                    </x-slot:action>
+                </x-ui.empty>
+            </div>
+        @endforelse
     </div>
-    @if($donors->hasPages())
-    <div class="card-footer">{{ $donors->links() }}</div>
-    @endif
-</div>
 
+    <div class="pagination-wrap">{{ $donors->links() }}</div>
+</div>
 @endsection

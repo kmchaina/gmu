@@ -1,132 +1,117 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', 'Awards')
-
-@section('content_header')
-    <div class="d-flex justify-content-between align-items-center">
-        <h1><i class="fas fa-trophy mr-2"></i>Awards</h1>
-        @if(auth()->user()->hasAnyRole(['coordinator','planning_officer']))
-        <a href="{{ route('awards.create') }}" class="btn btn-primary">
-            <i class="fas fa-plus mr-1"></i> New Award
-        </a>
-        @endif
-    </div>
-@endsection
+@section('title', 'Active awards')
+@section('crumb', 'Awards & compliance')
 
 @section('content')
+@php
+    use App\Support\Days;
+    $current = request('status');
+@endphp
 
-{{-- Filters --}}
-<div class="card card-outline card-primary">
-    <div class="card-header"><h3 class="card-title"><i class="fas fa-filter mr-1"></i>Filter</h3></div>
-    <div class="card-body">
-        <form method="GET" action="{{ route('awards.index') }}" class="form-inline flex-wrap" style="gap:10px;">
-            <input type="text" name="search" value="{{ request('search') }}"
-                   class="form-control form-control-sm" placeholder="Title or contract number..." style="min-width:220px;">
-            <select name="status" class="form-control form-control-sm">
-                <option value="">All Statuses</option>
-                <option value="active"      {{ request('status') === 'active'      ? 'selected' : '' }}>Active</option>
-                <option value="completed"   {{ request('status') === 'completed'   ? 'selected' : '' }}>Completed</option>
-                <option value="suspended"   {{ request('status') === 'suspended'   ? 'selected' : '' }}>Suspended</option>
-                <option value="terminated"  {{ request('status') === 'terminated'  ? 'selected' : '' }}>Terminated</option>
-            </select>
-            <select name="donor_id" class="form-control form-control-sm">
-                <option value="">All Donors</option>
+<x-ui.page-head
+    title="Active awards"
+    :lede="$awards->total() . ' ' . Str::plural('award', $awards->total()) . ' · risk from the compliance engine: reports, ethics, calendar and burn rate'">
+    <x-slot:actions>
+        @can('create', App\Models\Award::class)
+            <a href="{{ route('awards.create') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Record an award</a>
+        @endcan
+    </x-slot:actions>
+</x-ui.page-head>
+
+<div class="stack">
+
+    <div class="row-between">
+        <div class="chips">
+            <a href="{{ route('awards.index') }}" class="chip {{ ! $current ? 'is-active' : '' }}">All</a>
+            @foreach(['active' => 'Active', 'completed' => 'Completed', 'suspended' => 'Suspended', 'terminated' => 'Terminated'] as $value => $label)
+                <a href="{{ route('awards.index', ['status' => $value]) }}" class="chip {{ $current === $value ? 'is-active' : '' }}">{{ $label }}</a>
+            @endforeach
+        </div>
+
+        <form method="GET" class="row" style="gap:8px;">
+            @if($current)<input type="hidden" name="status" value="{{ $current }}">@endif
+            <select name="donor_id" class="select" style="width:180px;" onchange="this.form.submit()">
+                <option value="">All donors</option>
                 @foreach($donors as $donor)
-                    <option value="{{ $donor->id }}" {{ request('donor_id') == $donor->id ? 'selected' : '' }}>
-                        {{ $donor->acronym ?? $donor->name }}
-                    </option>
+                    <option value="{{ $donor->id }}" @selected(request('donor_id') == $donor->id)>{{ $donor->acronym ?? $donor->name }}</option>
                 @endforeach
             </select>
-            <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-search mr-1"></i>Search</button>
-            <a href="{{ route('awards.index') }}" class="btn btn-sm btn-default">Reset</a>
+            <input type="search" name="search" class="input" style="width:200px;" placeholder="Title or contract number"
+                   value="{{ request('search') }}">
+            <button class="btn"><i class="fas fa-search"></i></button>
         </form>
     </div>
-</div>
 
-{{-- Awards Table --}}
-<div class="card">
-    <div class="card-header">
-        <h3 class="card-title">{{ $awards->total() }} Award(s)</h3>
-    </div>
-    <div class="card-body p-0">
-        @if($awards->isEmpty())
-            <div class="text-center text-muted py-5">
-                <i class="fas fa-trophy fa-3x mb-3"></i>
-                <h5>No awards found.</h5>
+    <div class="grid grid-cards">
+        @forelse($awards as $award)
+            @php
+                $burn      = $award->burnRate();
+                $light     = $award->traffic_light;
+                $daysLeft  = Days::until($award->end_date);
+                $accent    = $light === 'red' ? 'danger' : ($light === 'yellow' ? 'warn' : null);
+            @endphp
+
+            <div class="card {{ $accent ? "accent-{$accent}" : '' }}">
+                <div class="card-body" style="display:flex; flex-direction:column; gap:16px;">
+                    <div class="row-between" style="align-items:flex-start;">
+                        <div style="min-width:0;">
+                            <div class="eyebrow">{{ $award->donor?->acronym ?? $award->donor?->name }}</div>
+                            <a href="{{ route('awards.show', $award) }}"
+                               style="display:block; margin-top:7px; font-size:15px; font-weight:600; letter-spacing:-.2px; line-height:1.35; color:var(--ink);">
+                                {{ $award->title }}
+                            </a>
+                            <div class="tiny mono muted-3" style="margin-top:6px;">
+                                {{ $award->contract_number }} · {{ $award->proposal?->leadPi?->name }}
+                            </div>
+                        </div>
+                        <span class="dot dot-{{ $light === 'red' ? 'red' : ($light === 'yellow' ? 'amber' : 'green') }}"
+                              title="Compliance risk: {{ $light }}"></span>
+                    </div>
+
+                    <x-ui.meter :value="$burn" label="Budget used" />
+
+                    <div class="row-between" style="padding-top:14px; border-top:1px solid var(--line-soft);">
+                        <div class="kv">
+                            <span class="k">Value</span>
+                            <span class="v">{{ $award->currency }} {{ number_format($award->total_budget, 0) }}</span>
+                        </div>
+                        <div class="kv">
+                            <span class="k">Period ends</span>
+                            <span class="v">{{ $award->end_date?->format('d M Y') }}</span>
+                        </div>
+                        <div class="kv">
+                            <span class="k">{{ $daysLeft < 0 ? 'Ended' : 'Remaining' }}</span>
+                            <span class="v">{{ $daysLeft < 0 ? abs($daysLeft) . 'd ago' : $daysLeft . ' days' }}</span>
+                        </div>
+                        <div class="kv">
+                            <span class="k">Reports</span>
+                            <span class="v">{{ $award->reports_count }}</span>
+                        </div>
+                    </div>
+
+                    @if($award->overdue_reports_count > 0 || $award->due_soon_count > 0)
+                        <div class="row" style="gap:8px;">
+                            @if($award->overdue_reports_count > 0)
+                                <x-ui.pill tone="danger">{{ $award->overdue_reports_count }} overdue {{ Str::plural('report', $award->overdue_reports_count) }}</x-ui.pill>
+                            @endif
+                            @if($award->due_soon_count > 0)
+                                <x-ui.pill tone="warn">{{ $award->due_soon_count }} due within 14d</x-ui.pill>
+                            @endif
+                        </div>
+                    @endif
+                </div>
             </div>
-        @else
-        <table class="table table-hover table-bordered mb-0">
-            <thead class="thead-light">
-                <tr>
-                    <th width="50">Health</th>
-                    <th>Title / Contract</th>
-                    <th>Donor</th>
-                    <th>Lead PI</th>
-                    <th>Period</th>
-                    <th>Budget</th>
-                    <th>Status</th>
-                    <th width="60">Reports</th>
-                    <th width="80">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($awards as $award)
-                @php $tl = $award->traffic_light; @endphp
-                <tr>
-                    <td class="text-center">
-                        <span class="badge badge-{{ $tl === 'green' ? 'success' : ($tl === 'yellow' ? 'warning' : 'danger') }}"
-                              title="{{ ucfirst($tl) }} status">
-                            <i class="fas fa-circle"></i>
-                        </span>
-                    </td>
-                    <td>
-                        <a href="{{ route('awards.show', $award) }}" class="font-weight-bold text-dark">
-                            {{ Str::limit($award->title, 55) }}
-                        </a>
-                        <br><small class="text-muted">{{ $award->contract_number }}</small>
-                    </td>
-                    <td>
-                        <span class="badge badge-secondary">{{ $award->donor->acronym ?? $award->donor->name }}</span>
-                    </td>
-                    <td>{{ $award->proposal->leadPi->name ?? '-' }}</td>
-                    <td>
-                        <small>
-                            {{ $award->start_date->format('M Y') }} – {{ $award->end_date->format('M Y') }}
-                        </small>
-                    </td>
-                    <td>
-                        <strong>{{ number_format($award->total_budget, 0) }}</strong>
-                        <small class="text-muted">{{ $award->currency }}</small>
-                    </td>
-                    <td>
-                        @if($award->status === 'active') <span class="badge badge-success">Active</span>
-                        @elseif($award->status === 'completed') <span class="badge badge-primary">Completed</span>
-                        @elseif($award->status === 'suspended') <span class="badge badge-warning">Suspended</span>
-                        @else <span class="badge badge-danger">Terminated</span>
-                        @endif
-                    </td>
-                    <td class="text-center">
-                        <span class="badge badge-info">{{ $award->reports_count }}</span>
-                    </td>
-                    <td>
-                        <a href="{{ route('awards.show', $award) }}" class="btn btn-xs btn-outline-primary" title="View">
-                            <i class="fas fa-eye"></i>
-                        </a>
-                        @if(auth()->user()->hasAnyRole(['coordinator','planning_officer','finance_officer']))
-                        <a href="{{ route('awards.edit', $award) }}" class="btn btn-xs btn-outline-warning" title="Edit">
-                            <i class="fas fa-edit"></i>
-                        </a>
-                        @endif
-                    </td>
-                </tr>
-                @endforeach
-            </tbody>
-        </table>
-        @endif
+        @empty
+            <div class="card" style="grid-column:1/-1;">
+                <x-ui.empty icon="fa-trophy" title="No awards match">
+                    Awards appear here once a funded proposal has its contract recorded. Each card shows the compliance
+                    risk, the budget used, and what is overdue.
+                </x-ui.empty>
+            </div>
+        @endforelse
     </div>
-    @if($awards->hasPages())
-    <div class="card-footer">{{ $awards->links() }}</div>
-    @endif
-</div>
 
+    <div class="pagination-wrap">{{ $awards->links() }}</div>
+</div>
 @endsection

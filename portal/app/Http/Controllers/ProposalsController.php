@@ -18,7 +18,10 @@ class ProposalsController extends Controller
 
         $user  = auth()->user();
         $query = Proposal::with('fundingCall.donor', 'leadPi', 'assignedOfficer')
-            ->withCount('reviews');
+            ->withCount([
+                'reviews',
+                'reviews as approved_reviews_count' => fn($q) => $q->where('status', 'approved'),
+            ]);
 
         // GMU officers and technical reviewers see the whole pipeline;
         // researchers see the proposals they are actually on (finding C4).

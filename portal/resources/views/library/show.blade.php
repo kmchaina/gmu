@@ -1,137 +1,81 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', $library->title)
-
-@section('content_header')
-    <div class="d-flex justify-content-between align-items-center">
-        <h1><i class="fas fa-book-open mr-2"></i>{{ $library->title }}</h1>
-        <div>
-            <button class="btn btn-sm btn-outline-primary" id="copyBtn"
-                    data-url="{{ route('library.copy', $library) }}">
-                <i class="fas fa-copy mr-1"></i>Copy Text
-            </button>
-            <a href="{{ route('library.edit', $library) }}" class="btn btn-sm btn-secondary ml-1">
-                <i class="fas fa-edit mr-1"></i>Edit
-            </a>
-        </div>
-    </div>
-@endsection
+@section('title', Str::limit($library->title, 40))
+@section('crumb', 'Proposal library')
 
 @section('content')
-
-@if(session('success'))
-    <div class="alert alert-success alert-dismissible">
-        <button type="button" class="close" data-dismiss="alert">&times;</button>
-        {{ session('success') }}
+<div class="page-head">
+    <div style="min-width:0;">
+        <a href="{{ route('library.index') }}" class="small">&larr; Proposal library</a>
+        <h1 style="margin-top:8px;">{{ $library->title }}</h1>
+        <div class="row" style="gap:12px; margin-top:10px;">
+            <x-ui.pill :tone="$library->is_approved ? 'ok' : 'warn'">
+                {{ $library->is_approved ? 'Approved for use' : 'Awaiting approval' }}
+            </x-ui.pill>
+            <span class="small muted">{{ \App\Models\LibraryItem::categories()[$library->category] ?? $library->category }}</span>
+            <span class="small muted-3">Used {{ $library->use_count }} {{ Str::plural('time', $library->use_count) }}</span>
+        </div>
     </div>
-@endif
-
-<div class="row">
-    <div class="col-md-8">
-        <div class="card card-outline card-primary">
-            <div class="card-header">
-                <h3 class="card-title">Content</h3>
-                <div class="card-tools">
-                    @if($library->is_approved)
-                        <span class="badge badge-success">Approved</span>
-                    @else
-                        <span class="badge badge-warning">Pending Approval</span>
-                        @if(auth()->user()->hasRole('coordinator'))
-                            <form method="POST" action="{{ route('library.approve', $library) }}" class="d-inline ml-1">
-                                @csrf
-                                <button class="btn btn-xs btn-success">Approve Now</button>
-                            </form>
-                        @endif
-                    @endif
-                </div>
-            </div>
-            <div class="card-body">
-                <pre id="contentBlock" class="bg-light p-3 rounded"
-                     style="white-space:pre-wrap;font-family:inherit;font-size:.9rem;line-height:1.6">{{ $library->content }}</pre>
-            </div>
-        </div>
-
-        @if($library->usage_notes)
-        <div class="card card-outline card-info">
-            <div class="card-header"><h3 class="card-title">Usage Notes</h3></div>
-            <div class="card-body">{{ $library->usage_notes }}</div>
-        </div>
-        @endif
-    </div>
-
-    <div class="col-md-4">
-        <div class="card card-outline card-secondary">
-            <div class="card-header"><h3 class="card-title">Details</h3></div>
-            <div class="card-body p-0">
-                <table class="table table-sm mb-0">
-                    <tr>
-                        <th class="pl-3 w-40">Category</th>
-                        <td>{{ \App\Models\LibraryItem::categories()[$library->category] ?? $library->category }}</td>
-                    </tr>
-                    @if($library->funder_relevance)
-                    <tr>
-                        <th class="pl-3">Funders</th>
-                        <td>{{ $library->funder_relevance }}</td>
-                    </tr>
-                    @endif
-                    @if($library->tags)
-                    <tr>
-                        <th class="pl-3">Tags</th>
-                        <td>
-                            @foreach($library->tags as $tag)
-                                <span class="badge badge-secondary mr-1">{{ $tag }}</span>
-                            @endforeach
-                        </td>
-                    </tr>
-                    @endif
-                    <tr>
-                        <th class="pl-3">Times Used</th>
-                        <td><strong>{{ $library->use_count }}</strong></td>
-                    </tr>
-                    <tr>
-                        <th class="pl-3">Created By</th>
-                        <td>{{ $library->createdBy?->name }}</td>
-                    </tr>
-                    <tr>
-                        <th class="pl-3">Last Updated</th>
-                        <td>{{ $library->updated_at->format('d M Y') }}</td>
-                    </tr>
-                </table>
-            </div>
-        </div>
-
-        @if(auth()->user()->hasAnyRole(['coordinator', 'planning_officer']))
-        <form method="POST" action="{{ route('library.destroy', $library) }}">
-            @csrf @method('DELETE')
-            <button class="btn btn-sm btn-outline-danger w-100"
-                    onclick="return confirm('Remove this library item?')">
-                <i class="fas fa-trash mr-1"></i>Remove from Library
-            </button>
-        </form>
-        @endif
+    <div class="page-actions">
+        <button class="btn" onclick="copyBlock()"><i class="fas fa-copy"></i> Copy text</button>
+        @can('update', $library)
+            <a href="{{ route('library.edit', $library) }}" class="btn"><i class="fas fa-pen"></i> Edit</a>
+        @endcan
+        @can('approve', $library)
+            <form method="POST" action="{{ route('library.approve', $library) }}" class="inline-form">
+                @csrf
+                <button class="btn btn-primary">
+                    <i class="fas {{ $library->is_approved ? 'fa-eye-slash' : 'fa-check' }}"></i>
+                    {{ $library->is_approved ? 'Unpublish' : 'Approve' }}
+                </button>
+            </form>
+        @endcan
     </div>
 </div>
 
-<a href="{{ route('library.index') }}" class="btn btn-secondary">
-    <i class="fas fa-arrow-left mr-1"></i>Back to Library
-</a>
-@endsection
+<div class="grid grid-wide">
+    <x-ui.card title="The text">
+        <div id="block-content" style="line-height:1.8; color:var(--ink-2); white-space:pre-line;">{{ $library->content }}</div>
+    </x-ui.card>
 
-@section('js')
+    <div class="stack">
+        @if($library->usage_notes)
+            <x-ui.card title="When to use it">
+                <p class="small muted" style="line-height:1.75;">{{ $library->usage_notes }}</p>
+            </x-ui.card>
+        @endif
+
+        <x-ui.card title="Details">
+            <div class="stack-sm small">
+                <div class="row-between"><span class="muted">Category</span>
+                    <span>{{ \App\Models\LibraryItem::categories()[$library->category] ?? $library->category }}</span></div>
+                <div class="row-between"><span class="muted">Funders</span><span>{{ $library->funder_relevance ?? 'Any' }}</span></div>
+                <div class="row-between"><span class="muted">Added by</span><span>{{ $library->createdBy?->name }}</span></div>
+                <div class="row-between"><span class="muted">Last updated</span><span>{{ $library->updated_at?->format('d M Y') }}</span></div>
+            </div>
+
+            @if($library->tags)
+                <div class="divider"></div>
+                <div class="row" style="gap:6px;">
+                    @foreach($library->tags as $tag)<x-ui.pill>{{ $tag }}</x-ui.pill>@endforeach
+                </div>
+            @endif
+        </x-ui.card>
+    </div>
+</div>
+
+@push('scripts')
 <script>
-document.getElementById('copyBtn').addEventListener('click', function () {
-    fetch(this.dataset.url)
-        .then(r => r.json())
-        .then(data => {
-            navigator.clipboard.writeText(data.content).then(() => {
-                this.innerHTML = '<i class="fas fa-check mr-1"></i>Copied!';
-                this.classList.replace('btn-outline-primary', 'btn-success');
-                setTimeout(() => {
-                    this.innerHTML = '<i class="fas fa-copy mr-1"></i>Copy Text';
-                    this.classList.replace('btn-success', 'btn-outline-primary');
-                }, 2500);
-            });
-        });
-});
+function copyBlock() {
+    const text = document.getElementById('block-content').innerText;
+    navigator.clipboard.writeText(text).then(() => {
+        fetch('{{ route('library.copy', $library) }}');
+        const btn = event.currentTarget;
+        const original = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i> Copied';
+        setTimeout(() => btn.innerHTML = original, 2000);
+    });
+}
 </script>
+@endpush
 @endsection

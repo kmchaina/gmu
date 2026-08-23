@@ -1,103 +1,85 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', 'Document Repository')
-
-@section('content_header')
-    <div class="d-flex justify-content-between align-items-center">
-        <h1><i class="fas fa-folder-open mr-2"></i>Document Repository</h1>
-        <a href="{{ route('documents.create') }}" class="btn btn-primary">
-            <i class="fas fa-upload mr-1"></i> Upload Document
-        </a>
-    </div>
-@endsection
+@section('title', 'Document repository')
+@section('crumb', 'Library')
 
 @section('content')
+@php $current = request('category'); @endphp
 
-<div class="card card-outline card-primary">
-    <div class="card-header"><h3 class="card-title"><i class="fas fa-filter mr-1"></i>Filter</h3></div>
-    <div class="card-body">
-        <form method="GET" action="{{ route('documents.index') }}" class="form-inline flex-wrap" style="gap:10px;">
-            <input type="text" name="search" value="{{ request('search') }}"
-                   class="form-control form-control-sm" placeholder="Search title..." style="min-width:220px;">
-            <select name="category" class="form-control form-control-sm">
-                <option value="">All Categories</option>
-                <option value="sop"      {{ request('category') === 'sop'      ? 'selected' : '' }}>SOP</option>
-                <option value="template" {{ request('category') === 'template' ? 'selected' : '' }}>Template</option>
-                <option value="policy"   {{ request('category') === 'policy'   ? 'selected' : '' }}>Policy</option>
-                <option value="contract" {{ request('category') === 'contract' ? 'selected' : '' }}>Contract</option>
-                <option value="report"   {{ request('category') === 'report'   ? 'selected' : '' }}>Report</option>
-                <option value="audit"    {{ request('category') === 'audit'    ? 'selected' : '' }}>Audit</option>
-                <option value="other"    {{ request('category') === 'other'    ? 'selected' : '' }}>Other</option>
-            </select>
-            <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-search mr-1"></i>Search</button>
-            <a href="{{ route('documents.index') }}" class="btn btn-sm btn-default">Reset</a>
+<x-ui.page-head
+    title="Document repository"
+    :lede="$documents->total() . ' ' . Str::plural('document', $documents->total()) . ' · SOPs, templates, contracts and audit evidence'">
+    <x-slot:actions>
+        <a href="{{ route('documents.create') }}" class="btn btn-primary"><i class="fas fa-upload"></i> Upload</a>
+    </x-slot:actions>
+</x-ui.page-head>
+
+<div class="stack">
+
+    <div class="row-between">
+        <div class="chips">
+            <a href="{{ route('documents.index') }}" class="chip {{ ! $current ? 'is-active' : '' }}">All</a>
+            @foreach(['sop' => 'SOPs', 'template' => 'Templates', 'policy' => 'Policies', 'contract' => 'Contracts', 'report' => 'Reports', 'audit' => 'Audit', 'other' => 'Other'] as $value => $label)
+                <a href="{{ route('documents.index', ['category' => $value]) }}" class="chip {{ $current === $value ? 'is-active' : '' }}">{{ $label }}</a>
+            @endforeach
+        </div>
+        <form method="GET" class="row" style="gap:8px;">
+            @if($current)<input type="hidden" name="category" value="{{ $current }}">@endif
+            <input type="search" name="search" class="input" style="width:220px;" placeholder="Search titles" value="{{ request('search') }}">
+            <button class="btn"><i class="fas fa-search"></i></button>
         </form>
     </div>
-</div>
 
-<div class="card">
-    <div class="card-header"><h3 class="card-title">{{ $documents->total() }} Document(s)</h3></div>
-    <div class="card-body p-0">
-        @if($documents->isEmpty())
-            <div class="text-center text-muted py-5">
-                <i class="fas fa-folder-open fa-3x mb-3"></i>
-                <h5>No documents found.</h5>
-            </div>
-        @else
-        <table class="table table-hover table-bordered mb-0">
-            <thead class="thead-light">
-                <tr>
-                    <th>Title</th>
-                    <th>Category</th>
-                    <th>Ver.</th>
-                    <th>Uploaded By</th>
-                    <th>Date</th>
-                    <th>Access</th>
-                    <th width="100">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($documents as $doc)
-                <tr>
-                    <td>
-                        <a href="{{ route('documents.show', $doc) }}" target="_blank">
-                            <i class="fas fa-file mr-1 text-muted"></i>{{ $doc->title }}
-                        </a>
-                        @if($doc->description)
-                            <br><small class="text-muted">{{ Str::limit($doc->description, 60) }}</small>
-                        @endif
-                    </td>
-                    <td><span class="badge badge-secondary">{{ ucfirst($doc->category) }}</span></td>
-                    <td>v{{ $doc->version }}</td>
-                    <td>{{ $doc->uploadedBy->name }}</td>
-                    <td>{{ $doc->created_at->format('d M Y') }}</td>
-                    <td>
-                        @if($doc->is_public)
-                            <span class="badge badge-success">Public</span>
-                        @else
-                            <span class="badge badge-secondary">Internal</span>
-                        @endif
-                    </td>
-                    <td>
-                        <a href="{{ route('documents.show', $doc) }}" target="_blank"
-                           class="btn btn-xs btn-outline-primary" title="Download">
-                            <i class="fas fa-download"></i>
-                        </a>
-                        @if(auth()->user()->hasAnyRole(['coordinator','planning_officer']) || $doc->uploaded_by === auth()->id())
-                        <a href="{{ route('documents.edit', $doc) }}" class="btn btn-xs btn-outline-warning" title="Edit">
-                            <i class="fas fa-edit"></i>
-                        </a>
-                        @endif
-                    </td>
-                </tr>
-                @endforeach
-            </tbody>
-        </table>
-        @endif
-    </div>
-    @if($documents->hasPages())
-    <div class="card-footer">{{ $documents->links() }}</div>
-    @endif
-</div>
+    <x-ui.card :flush="true">
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr><th>Document</th><th>Category</th><th>Version</th><th>Uploaded</th><th>Visibility</th><th>Retain until</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @forelse($documents as $doc)
+                        <tr>
+                            <td>
+                                <a href="{{ route('documents.show', $doc) }}" class="strong">{{ $doc->title }}</a>
+                                <div class="tiny muted-3">{{ $doc->file_name }}@if($doc->file_size) · {{ number_format($doc->file_size / 1024, 0) }} KB @endif</div>
+                            </td>
+                            <td><x-ui.pill>{{ Str::headline($doc->category) }}</x-ui.pill></td>
+                            <td class="mono small">v{{ $doc->version }}</td>
+                            <td class="small muted">
+                                {{ $doc->created_at?->format('d M Y') }}
+                                <div class="tiny muted-3">{{ $doc->uploadedBy?->name }}</div>
+                            </td>
+                            <td>
+                                @if($doc->is_public)
+                                    <x-ui.pill tone="info">Staff-wide</x-ui.pill>
+                                @else
+                                    <x-ui.pill>Restricted</x-ui.pill>
+                                @endif
+                            </td>
+                            <td class="small {{ $doc->isDueForReview() ? 'text-warn' : 'muted' }}">
+                                {{ $doc->retain_until?->format('M Y') ?? '—' }}
+                                @if($doc->isDueForReview())<div class="tiny">due for review</div>@endif
+                            </td>
+                            <td class="num">
+                                <a href="{{ route('documents.show', $doc) }}" class="btn btn-sm"><i class="fas fa-download"></i></a>
+                                @can('update', $doc)
+                                    <a href="{{ route('documents.edit', $doc) }}" class="btn btn-sm"><i class="fas fa-pen"></i></a>
+                                @endcan
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="7">
+                            <x-ui.empty icon="fa-folder-open" title="Nothing filed yet">
+                                SOPs, templates, signed contracts and audit responses belong here. Files are private by
+                                default and served only to those allowed to see them.
+                            </x-ui.empty>
+                        </td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </x-ui.card>
 
+    <div class="pagination-wrap">{{ $documents->links() }}</div>
+</div>
 @endsection

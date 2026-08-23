@@ -1,122 +1,113 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
 @section('title', 'Reports')
-
-@section('content_header')
-    <div class="d-flex justify-content-between align-items-center">
-        <h1><i class="fas fa-file-invoice mr-2"></i>Reports</h1>
-        <a href="{{ route('reports.create') }}" class="btn btn-primary">
-            <i class="fas fa-plus mr-1"></i> Add Report
-        </a>
-    </div>
-@endsection
+@section('crumb', 'Awards & compliance')
 
 @section('content')
+@php
+    use App\Support\Days;
+    $current = request('status');
+    $overdue = $reports->filter(fn($r) => $r->status === 'pending' && Days::isPast($r->due_date))->count();
+@endphp
 
-{{-- Filters --}}
-<div class="card card-outline card-primary">
-    <div class="card-header"><h3 class="card-title"><i class="fas fa-filter mr-1"></i>Filter</h3></div>
-    <div class="card-body">
-        <form method="GET" action="{{ route('reports.index') }}" class="form-inline flex-wrap" style="gap:10px;">
-            <select name="type" class="form-control form-control-sm">
-                <option value="">All Types</option>
-                <option value="technical"  {{ request('type') === 'technical'  ? 'selected' : '' }}>Technical</option>
-                <option value="financial"  {{ request('type') === 'financial'  ? 'selected' : '' }}>Financial</option>
-                <option value="combined"   {{ request('type') === 'combined'   ? 'selected' : '' }}>Combined</option>
+<x-ui.page-head
+    title="Reports"
+    :lede="$reports->total() . ' ' . Str::plural('report', $reports->total()) . ' on record' . ($overdue ? ' · ' . $overdue . ' overdue on this page' : '')">
+    <x-slot:actions>
+        @can('create', App\Models\Report::class)
+            <a href="{{ route('reports.create') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Record a report</a>
+        @endcan
+    </x-slot:actions>
+</x-ui.page-head>
+
+<div class="stack">
+
+    <div class="row-between">
+        <div class="chips">
+            <a href="{{ route('reports.index') }}" class="chip {{ ! $current ? 'is-active' : '' }}">All</a>
+            @foreach(['pending' => 'Pending', 'submitted' => 'Submitted', 'under_review' => 'Under review', 'approved' => 'Approved', 'rejected' => 'Returned'] as $value => $label)
+                <a href="{{ route('reports.index', ['status' => $value]) }}" class="chip {{ $current === $value ? 'is-active' : '' }}">{{ $label }}</a>
+            @endforeach
+        </div>
+
+        <form method="GET" class="row" style="gap:8px;">
+            @if($current)<input type="hidden" name="status" value="{{ $current }}">@endif
+            <select name="type" class="select" style="width:150px;" onchange="this.form.submit()">
+                <option value="">All types</option>
+                @foreach(['technical' => 'Technical', 'financial' => 'Financial', 'combined' => 'Combined'] as $value => $label)
+                    <option value="{{ $value }}" @selected(request('type') === $value)>{{ $label }}</option>
+                @endforeach
             </select>
-            <select name="status" class="form-control form-control-sm">
-                <option value="">All Statuses</option>
-                <option value="pending"      {{ request('status') === 'pending'      ? 'selected' : '' }}>Pending</option>
-                <option value="submitted"    {{ request('status') === 'submitted'    ? 'selected' : '' }}>Submitted</option>
-                <option value="under_review" {{ request('status') === 'under_review' ? 'selected' : '' }}>Under Review</option>
-                <option value="approved"     {{ request('status') === 'approved'     ? 'selected' : '' }}>Approved</option>
-                <option value="rejected"     {{ request('status') === 'rejected'     ? 'selected' : '' }}>Rejected</option>
-            </select>
-            <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-search mr-1"></i>Filter</button>
-            <a href="{{ route('reports.index') }}" class="btn btn-sm btn-default">Reset</a>
         </form>
     </div>
-</div>
 
-{{-- Reports Table --}}
-<div class="card">
-    <div class="card-header">
-        <h3 class="card-title">{{ $reports->total() }} Report(s)</h3>
-    </div>
-    <div class="card-body p-0">
-        @if($reports->isEmpty())
-            <div class="text-center text-muted py-5">
-                <i class="fas fa-file-invoice fa-3x mb-3"></i>
-                <h5>No reports found.</h5>
-            </div>
-        @else
-        <table class="table table-hover table-bordered mb-0">
-            <thead class="thead-light">
-                <tr>
-                    <th>Title / Award</th>
-                    <th>Type</th>
-                    <th>Period</th>
-                    <th>Due Date</th>
-                    <th>Submitted</th>
-                    <th>Status</th>
-                    <th width="80">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($reports as $report)
-                @php $overdue = $report->due_date->isPast() && $report->status === 'pending'; @endphp
-                <tr class="{{ $overdue ? 'table-danger' : '' }}">
-                    <td>
-                        <a href="{{ route('reports.show', $report) }}" class="font-weight-bold text-dark">
-                            {{ Str::limit($report->title, 50) }}
-                        </a>
-                        <br>
-                        <small class="text-muted">
-                            <a href="{{ route('awards.show', $report->award) }}">{{ Str::limit($report->award->title, 40) }}</a>
-                        </small>
-                    </td>
-                    <td><span class="badge badge-secondary">{{ ucfirst($report->report_type) }}</span></td>
-                    <td>
-                        @if($report->period_start && $report->period_end)
-                            <small>{{ $report->period_start->format('M Y') }} – {{ $report->period_end->format('M Y') }}</small>
-                        @else
-                            <span class="text-muted">-</span>
-                        @endif
-                    </td>
-                    <td>
-                        <strong class="{{ $overdue ? 'text-danger' : '' }}">
-                            {{ $report->due_date->format('d M Y') }}
-                        </strong>
-                        @if($overdue)
-                            <br><span class="badge badge-danger">Overdue</span>
-                        @endif
-                    </td>
-                    <td>{{ $report->submitted_date ? $report->submitted_date->format('d M Y') : '-' }}</td>
-                    <td>
-                        @if($report->status === 'approved') <span class="badge badge-success">Approved</span>
-                        @elseif($report->status === 'submitted') <span class="badge badge-info">Submitted</span>
-                        @elseif($report->status === 'under_review') <span class="badge badge-warning">Under Review</span>
-                        @elseif($report->status === 'rejected') <span class="badge badge-danger">Rejected</span>
-                        @else <span class="badge badge-secondary">Pending</span>
-                        @endif
-                    </td>
-                    <td>
-                        <a href="{{ route('reports.show', $report) }}" class="btn btn-xs btn-outline-primary" title="View">
-                            <i class="fas fa-eye"></i>
-                        </a>
-                        <a href="{{ route('reports.edit', $report) }}" class="btn btn-xs btn-outline-warning" title="Edit">
-                            <i class="fas fa-edit"></i>
-                        </a>
-                    </td>
-                </tr>
-                @endforeach
-            </tbody>
-        </table>
-        @endif
-    </div>
-    @if($reports->hasPages())
-    <div class="card-footer">{{ $reports->links() }}</div>
-    @endif
-</div>
+    <x-ui.card :flush="true">
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Report</th><th>Award</th><th>Period</th><th>Due</th>
+                        <th>Status</th><th>Sent to donor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($reports as $report)
+                        @php
+                            $days = Days::until($report->due_date);
+                            $late = $report->status === 'pending' && $days < 0;
+                        @endphp
+                        <tr>
+                            <td>
+                                <a href="{{ route('reports.show', $report) }}" class="strong">{{ Str::limit($report->title, 40) }}</a>
+                                <div class="tiny muted-3">{{ ucfirst($report->report_type) }}@if($report->submittedBy) · {{ $report->submittedBy->name }}@endif</div>
+                            </td>
+                            <td>
+                                <div class="small">{{ Str::limit($report->award?->title, 32) }}</div>
+                                <div class="tiny muted-3 mono">{{ $report->award?->contract_number }}</div>
+                            </td>
+                            <td class="small muted">
+                                {{ $report->period_start?->format('M Y') }} – {{ $report->period_end?->format('M Y') }}
+                            </td>
+                            <td class="small">
+                                {{ $report->due_date?->format('d M Y') }}
+                                @if($late)
+                                    <div class="tiny text-danger">{{ abs($days) }}d overdue</div>
+                                @elseif($report->status === 'pending' && $days <= 14)
+                                    <div class="tiny text-warn">in {{ $days }}d</div>
+                                @endif
+                            </td>
+                            <td>
+                                <x-ui.pill :tone="match(true) {
+                                    $report->status === 'approved' => 'ok',
+                                    $report->status === 'rejected' => 'danger',
+                                    $late => 'danger',
+                                    $report->status === 'under_review' => 'warn',
+                                    default => null,
+                                }">{{ Str::headline($report->status) }}</x-ui.pill>
+                            </td>
+                            <td class="small">
+                                @if($report->sent_to_donor_on)
+                                    <span class="text-ok">{{ $report->sent_to_donor_on->format('d M Y') }}</span>
+                                @elseif($report->status === 'approved')
+                                    <span class="text-warn">approved, not sent</span>
+                                @else
+                                    <span class="muted-3">—</span>
+                                @endif
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="6">
+                            <x-ui.empty icon="fa-file-invoice" title="No reports">
+                                Reporting deadlines are generated when an award is set up, from the frequency agreed
+                                with the donor.
+                            </x-ui.empty>
+                        </td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </x-ui.card>
 
+    <div class="pagination-wrap">{{ $reports->links() }}</div>
+</div>
 @endsection

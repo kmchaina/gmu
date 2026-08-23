@@ -1,151 +1,78 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', 'Proposal Library')
-
-@section('content_header')
-    <div class="d-flex justify-content-between align-items-center">
-        <h1><i class="fas fa-book-open mr-2"></i>Proposal Library</h1>
-        <a href="{{ route('library.create') }}" class="btn btn-primary btn-sm">
-            <i class="fas fa-plus mr-1"></i>Add Content Block
-        </a>
-    </div>
-@endsection
+@section('title', 'Proposal library')
+@section('crumb', 'Proposals')
 
 @section('content')
+@php $current = request('category'); @endphp
 
-@if(session('success'))
-    <div class="alert alert-success alert-dismissible">
-        <button type="button" class="close" data-dismiss="alert">&times;</button>
-        {{ session('success') }}
-    </div>
-@endif
+<x-ui.page-head
+    title="Proposal library"
+    :lede="$items->total() . ' reusable ' . Str::plural('block', $items->total()) . ' · institutional text that does not need rewriting each time'">
+    <x-slot:actions>
+        <a href="{{ route('library.create') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add a block</a>
+    </x-slot:actions>
+</x-ui.page-head>
 
-{{-- Filters --}}
-<div class="card card-outline card-primary">
-    <div class="card-body py-2">
-        <form method="GET" action="{{ route('library.index') }}" class="row align-items-end g-2">
-            <div class="col-md-4">
-                <div class="input-group input-group-sm">
-                    <input type="text" name="search" class="form-control"
-                           value="{{ request('search') }}" placeholder="Search title or content…">
-                    <div class="input-group-append">
-                        <button class="btn btn-primary" type="submit"><i class="fas fa-search"></i></button>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <select name="category" class="form-control form-control-sm" onchange="this.form.submit()">
-                    <option value="">All Categories</option>
-                    @foreach($categories as $key => $label)
-                        <option value="{{ $key }}" @selected(request('category') === $key)>{{ $label }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="col-md-2">
-                <select name="approved" class="form-control form-control-sm" onchange="this.form.submit()">
-                    <option value="">All Items</option>
-                    <option value="1" @selected(request('approved') === '1')>Approved Only</option>
-                    <option value="0" @selected(request('approved') === '0')>Pending Approval</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <a href="{{ route('library.index') }}" class="btn btn-sm btn-default w-100">Reset</a>
-            </div>
+<div class="stack">
+
+    <div class="row-between">
+        <div class="chips">
+            <a href="{{ route('library.index') }}" class="chip {{ ! $current ? 'is-active' : '' }}">All</a>
+            @foreach($categories as $value => $label)
+                <a href="{{ route('library.index', ['category' => $value]) }}" class="chip {{ $current === $value ? 'is-active' : '' }}">{{ $label }}</a>
+            @endforeach
+        </div>
+        <form method="GET" class="row" style="gap:8px;">
+            @if($current)<input type="hidden" name="category" value="{{ $current }}">@endif
+            <input type="search" name="search" class="input" style="width:230px;" placeholder="Search the library" value="{{ request('search') }}">
+            <button class="btn"><i class="fas fa-search"></i></button>
         </form>
     </div>
-</div>
 
-{{-- Items grid --}}
-<div class="row">
-    @forelse($items as $item)
-    <div class="col-md-6 col-lg-4">
-        <div class="card card-outline {{ $item->is_approved ? 'card-success' : 'card-secondary' }} h-100">
-            <div class="card-header">
-                <h3 class="card-title">
-                    <a href="{{ route('library.show', $item) }}" class="text-dark">{{ $item->title }}</a>
-                </h3>
-                <div class="card-tools">
-                    @if(!$item->is_approved && auth()->user()->hasRole('coordinator'))
-                        <form method="POST" action="{{ route('library.approve', $item) }}" class="d-inline">
-                            @csrf
-                            <button class="btn btn-xs btn-success" title="Approve">
-                                <i class="fas fa-check"></i>
-                            </button>
-                        </form>
-                    @endif
-                    @if($item->is_approved)
-                        <span class="badge badge-success">Approved</span>
-                    @else
-                        <span class="badge badge-secondary">Pending</span>
-                    @endif
-                </div>
-            </div>
-            <div class="card-body">
-                <span class="badge badge-info mb-2">{{ $categories[$item->category] ?? $item->category }}</span>
-                @if($item->funder_relevance)
-                    <span class="badge badge-light mb-2">{{ $item->funder_relevance }}</span>
-                @endif
-                <p class="small text-muted mt-1 mb-0">{{ Str::limit(strip_tags($item->content), 150) }}</p>
-                @if($item->tags)
-                    <div class="mt-2">
-                        @foreach($item->tags as $tag)
-                            <span class="badge badge-secondary mr-1">{{ $tag }}</span>
-                        @endforeach
+    <div class="grid grid-cards">
+        @forelse($items as $item)
+            <div class="card">
+                <div class="card-body" style="display:flex; flex-direction:column; gap:14px;">
+                    <div class="row-between" style="align-items:flex-start;">
+                        <div>
+                            <div class="eyebrow">{{ $categories[$item->category] ?? $item->category }}</div>
+                            <a href="{{ route('library.show', $item) }}"
+                               style="display:block; margin-top:7px; font-size:14.5px; font-weight:600; line-height:1.35; color:var(--ink);">
+                                {{ $item->title }}
+                            </a>
+                        </div>
+                        @if($item->is_approved)
+                            <x-ui.pill tone="ok">Approved</x-ui.pill>
+                        @else
+                            <x-ui.pill tone="warn">Draft</x-ui.pill>
+                        @endif
                     </div>
-                @endif
-            </div>
-            <div class="card-footer d-flex justify-content-between align-items-center py-2">
-                <small class="text-muted">
-                    <i class="fas fa-copy mr-1"></i>Used {{ $item->use_count }} times
-                    &middot; {{ $item->updatedBy?->name ?? $item->createdBy?->name }}
-                </small>
-                <div>
-                    <button class="btn btn-xs btn-outline-primary copy-btn"
-                            data-id="{{ $item->id }}"
-                            data-url="{{ route('library.copy', $item) }}"
-                            title="Copy to clipboard">
-                        <i class="fas fa-copy"></i>
-                    </button>
-                    <a href="{{ route('library.edit', $item) }}" class="btn btn-xs btn-outline-secondary">
-                        <i class="fas fa-edit"></i>
-                    </a>
+
+                    <p class="small muted" style="line-height:1.65;">{{ Str::limit(strip_tags($item->content), 170) }}</p>
+
+                    <div class="row-between" style="padding-top:12px; border-top:1px solid var(--line-soft);">
+                        <span class="tiny muted-3">
+                            Used {{ $item->use_count }} {{ Str::plural('time', $item->use_count) }}
+                            @if($item->funder_relevance) · {{ $item->funder_relevance }}@endif
+                        </span>
+                        <a href="{{ route('library.show', $item) }}" class="btn btn-sm">Open</a>
+                    </div>
                 </div>
             </div>
-        </div>
+        @empty
+            <div class="card" style="grid-column:1/-1;">
+                <x-ui.empty icon="fa-book-open" title="The library is empty">
+                    Capability statements, facilities descriptions, data management plans — the paragraphs every
+                    proposal needs. Write them once, approve them, and reuse.
+                    <x-slot:action>
+                        <a href="{{ route('library.create') }}" class="btn btn-primary">Add the first block</a>
+                    </x-slot:action>
+                </x-ui.empty>
+            </div>
+        @endforelse
     </div>
-    @empty
-    <div class="col-12">
-        <div class="alert alert-light text-center py-5">
-            <i class="fas fa-book-open fa-2x text-muted mb-2"></i>
-            <p class="mb-0 text-muted">No library items yet.
-                <a href="{{ route('library.create') }}">Add the first content block.</a>
-            </p>
-        </div>
-    </div>
-    @endforelse
+
+    <div class="pagination-wrap">{{ $items->links() }}</div>
 </div>
-
-@if($items->hasPages())
-    <div class="mt-3">{{ $items->links() }}</div>
-@endif
-
-@endsection
-
-@section('js')
-<script>
-document.querySelectorAll('.copy-btn').forEach(btn => {
-    btn.addEventListener('click', function () {
-        fetch(this.dataset.url)
-            .then(r => r.json())
-            .then(data => {
-                navigator.clipboard.writeText(data.content).then(() => {
-                    const orig = this.innerHTML;
-                    this.innerHTML = '<i class="fas fa-check text-success"></i>';
-                    this.title = 'Copied!';
-                    setTimeout(() => { this.innerHTML = orig; this.title = 'Copy to clipboard'; }, 2000);
-                });
-            });
-    });
-});
-</script>
 @endsection

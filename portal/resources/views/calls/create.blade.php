@@ -1,188 +1,110 @@
-@extends('adminlte::page')
+@extends('layouts.gmu')
 
-@section('title', 'Post New Funding Call')
-
-@section('content_header')
-    <div class="d-flex justify-content-between align-items-center">
-        <h1><i class="fas fa-plus-circle mr-2"></i>Post New Funding Call</h1>
-        <a href="{{ route('calls.index') }}" class="btn btn-default"><i class="fas fa-arrow-left mr-1"></i>Back</a>
-    </div>
-@endsection
+@section('title', 'Post a funding call')
+@section('crumb', 'Grant opportunities')
 
 @section('content')
+<x-ui.page-head
+    title="Post a funding call"
+    lede="Once the status is open, every researcher is notified and can register interest." />
 
-<form action="{{ route('calls.store') }}" method="POST" enctype="multipart/form-data">
-@csrf
+<form method="POST" action="{{ route('calls.store') }}" enctype="multipart/form-data">
+    @csrf
 
-<div class="row">
-    <div class="col-md-8">
+    <div class="grid grid-wide">
+        <div class="stack">
+            <x-ui.card title="The opportunity">
+                <div class="form-grid">
+                    <x-ui.field label="Title" name="title" required wide>
+                        <input name="title" class="input @error('title') is-invalid @enderror"
+                               value="{{ old('title') }}" required maxlength="255">
+                    </x-ui.field>
 
-        <div class="card card-outline card-primary">
-            <div class="card-header"><h3 class="card-title">Call Details</h3></div>
-            <div class="card-body">
+                    <x-ui.field label="Donor" name="donor_id" required>
+                        <select name="donor_id" class="select" required>
+                            <option value="">Choose a donor…</option>
+                            @foreach($donors as $donor)
+                                <option value="{{ $donor->id }}" @selected(old('donor_id') == $donor->id)>{{ $donor->name }}</option>
+                            @endforeach
+                        </select>
+                    </x-ui.field>
 
-                <div class="form-group">
-                    <label>Call Title <span class="text-danger">*</span></label>
-                    <input type="text" name="title" value="{{ old('title') }}"
-                           class="form-control @error('title') is-invalid @enderror"
-                           placeholder="e.g. Call for Research Proposals on Malaria Prevention 2026">
-                    @error('title')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    <x-ui.field label="Theme" name="theme" help="Used by the matching engine">
+                        <input name="theme" class="input" value="{{ old('theme') }}" placeholder="Malaria, HIV, One Health…">
+                    </x-ui.field>
+
+                    <x-ui.field label="Description" name="description" wide>
+                        <textarea name="description" rows="4" class="textarea">{{ old('description') }}</textarea>
+                    </x-ui.field>
+
+                    <x-ui.field label="Eligibility" name="eligibility" wide help="Who may apply, and any institutional limits">
+                        <textarea name="eligibility" rows="3" class="textarea">{{ old('eligibility') }}</textarea>
+                    </x-ui.field>
                 </div>
+            </x-ui.card>
 
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label>Donor / Funder <span class="text-danger">*</span></label>
-                            <select name="donor_id" class="form-control select2 @error('donor_id') is-invalid @enderror">
-                                <option value="">-- Select Donor --</option>
-                                @foreach($donors as $donor)
-                                    <option value="{{ $donor->id }}" {{ old('donor_id') == $donor->id ? 'selected' : '' }}>
-                                        {{ $donor->name }} @if($donor->acronym)({{ $donor->acronym }})@endif
-                                    </option>
-                                @endforeach
-                            </select>
-                            @error('donor_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            <small><a href="{{ route('donors.create') }}" target="_blank">+ Add new donor</a></small>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label>Solicitation / Reference Number</label>
-                            <input type="text" name="solicitation_number" value="{{ old('solicitation_number') }}"
-                                   class="form-control" placeholder="e.g. RFA-TW-26-001">
-                        </div>
-                    </div>
+            <x-ui.card title="Budget and dates">
+                <div class="form-grid">
+                    <x-ui.field label="Estimated budget" name="estimated_budget">
+                        <input type="number" step="0.01" min="0" name="estimated_budget" class="input" value="{{ old('estimated_budget') }}">
+                    </x-ui.field>
+
+                    <x-ui.field label="Currency" name="currency" required>
+                        <select name="currency" class="select" required>
+                            @foreach(\App\Support\Money::supported() as $code)
+                                <option value="{{ $code }}" @selected(old('currency', \App\Support\Money::base()) === $code)>{{ $code }}</option>
+                            @endforeach
+                        </select>
+                    </x-ui.field>
+
+                    <x-ui.field label="Solicitation number" name="solicitation_number">
+                        <input name="solicitation_number" class="input" value="{{ old('solicitation_number') }}">
+                    </x-ui.field>
+
+                    <x-ui.field label="Opens" name="open_date">
+                        <input type="date" name="open_date" class="input" value="{{ old('open_date') }}">
+                    </x-ui.field>
+
+                    <x-ui.field label="Deadline" name="deadline" required help="Must be in the future">
+                        <input type="date" name="deadline" class="input" value="{{ old('deadline') }}" required
+                               min="{{ now()->addDay()->toDateString() }}">
+                    </x-ui.field>
                 </div>
-
-                <div class="form-group">
-                    <label>Research Theme / Area</label>
-                    <input type="text" name="theme" value="{{ old('theme') }}"
-                           class="form-control" placeholder="e.g. Infectious Diseases, Maternal Health, Nutrition...">
-                </div>
-
-                <div class="form-group">
-                    <label>Description / Summary</label>
-                    <textarea name="description" rows="4" class="form-control"
-                              placeholder="Describe the funding opportunity, objectives, and scope...">{{ old('description') }}</textarea>
-                </div>
-
-                <div class="form-group">
-                    <label>Eligibility Requirements</label>
-                    <textarea name="eligibility" rows="3" class="form-control"
-                              placeholder="Who can apply? Institutions, qualifications, countries...">{{ old('eligibility') }}</textarea>
-                </div>
-
-            </div>
+            </x-ui.card>
         </div>
 
-        <div class="card card-outline card-info">
-            <div class="card-header"><h3 class="card-title">Budget & Dates</h3></div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label>Estimated Budget</label>
-                            <input type="number" name="estimated_budget" value="{{ old('estimated_budget') }}"
-                                   class="form-control" placeholder="0.00" step="0.01" min="0">
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="form-group">
-                            <label>Currency</label>
-                            <select name="currency" class="form-control">
-                                <option value="USD" {{ old('currency','USD') === 'USD' ? 'selected' : '' }}>USD</option>
-                                <option value="EUR" {{ old('currency') === 'EUR' ? 'selected' : '' }}>EUR</option>
-                                <option value="GBP" {{ old('currency') === 'GBP' ? 'selected' : '' }}>GBP</option>
-                                <option value="TZS" {{ old('currency') === 'TZS' ? 'selected' : '' }}>TZS</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label>Open Date</label>
-                            <input type="date" name="open_date" value="{{ old('open_date') }}" class="form-control">
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label>Submission Deadline <span class="text-danger">*</span></label>
-                            <input type="date" name="deadline" value="{{ old('deadline') }}"
-                                   class="form-control @error('deadline') is-invalid @enderror">
-                            @error('deadline')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <div class="stack">
+            <x-ui.card title="Publication">
+                <div class="stack-sm">
+                    <x-ui.field label="Status" name="status" required>
+                        <select name="status" class="select" required>
+                            <option value="open" @selected(old('status', 'open') === 'open')>Open — notify researchers</option>
+                            <option value="draft" @selected(old('status') === 'draft')>Draft — not circulated</option>
+                            <option value="closed" @selected(old('status') === 'closed')>Closed</option>
+                            <option value="archived" @selected(old('status') === 'archived')>Archived</option>
+                        </select>
+                    </x-ui.field>
 
+                    <x-ui.field label="Origin" name="initiation_type" required>
+                        <select name="initiation_type" class="select" required>
+                            <option value="gmu_posted" @selected(old('initiation_type', 'gmu_posted') === 'gmu_posted')>Found by the GMU</option>
+                            <option value="researcher_initiated" @selected(old('initiation_type') === 'researcher_initiated')>Brought by a researcher</option>
+                        </select>
+                    </x-ui.field>
+
+                    <x-ui.field label="Call document" name="call_document" help="PDF or Word, up to 10 MB">
+                        <input type="file" name="call_document" class="input" accept=".pdf,.doc,.docx">
+                    </x-ui.field>
+                </div>
+            </x-ui.card>
+
+            <x-ui.card>
+                <div class="form-actions">
+                    <button class="btn btn-primary"><i class="fas fa-bullhorn"></i> Post the call</button>
+                    <a href="{{ route('calls.index') }}" class="btn">Cancel</a>
+                </div>
+            </x-ui.card>
+        </div>
     </div>
-
-    <div class="col-md-4">
-
-        <div class="card card-outline card-secondary">
-            <div class="card-header"><h3 class="card-title">Settings</h3></div>
-            <div class="card-body">
-
-                <div class="form-group">
-                    <label>Initiation Type <span class="text-danger">*</span></label>
-                    <select name="initiation_type" class="form-control">
-                        <option value="gmu_posted"           {{ old('initiation_type','gmu_posted') === 'gmu_posted' ? 'selected' : '' }}>GMU Posted</option>
-                        <option value="researcher_initiated" {{ old('initiation_type') === 'researcher_initiated' ? 'selected' : '' }}>Researcher Initiated</option>
-                    </select>
-                    <small class="text-muted">GMU Posted = GMU found this call. Researcher Initiated = team brought it to GMU.</small>
-                </div>
-
-                <div class="form-group">
-                    <label>Status <span class="text-danger">*</span></label>
-                    <select name="status" class="form-control @error('status') is-invalid @enderror">
-                        <option value="open"   {{ old('status','open') === 'open'  ? 'selected' : '' }}>Open (visible to all)</option>
-                        <option value="draft"  {{ old('status') === 'draft'        ? 'selected' : '' }}>Draft (GMU only)</option>
-                        <option value="closed" {{ old('status') === 'closed'       ? 'selected' : '' }}>Closed</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>Call Document / Guidelines</label>
-                    <div class="custom-file">
-                        <input type="file" name="call_document" class="custom-file-input" id="callDocument"
-                               accept=".pdf,.doc,.docx">
-                        <label class="custom-file-label" for="callDocument">Choose file (PDF/Word)</label>
-                    </div>
-                    <small class="text-muted">Max 10MB</small>
-                </div>
-
-            </div>
-        </div>
-
-        <div class="card bg-light">
-            <div class="card-body">
-                <p class="text-muted mb-2"><i class="fas fa-info-circle mr-1"></i>After posting:</p>
-                <ul class="text-muted small pl-3">
-                    <li>All researchers will receive an alert email</li>
-                    <li>The call will appear in the weekly digest</li>
-                    <li>Researchers can express interest from the call page</li>
-                    <li>You will select the team from interested researchers</li>
-                </ul>
-            </div>
-        </div>
-
-        <button type="submit" class="btn btn-primary btn-block btn-lg">
-            <i class="fas fa-paper-plane mr-1"></i> Post Funding Call
-        </button>
-        <a href="{{ route('calls.index') }}" class="btn btn-default btn-block">Cancel</a>
-
-    </div>
-</div>
-
 </form>
-
-@endsection
-
-@section('js')
-<script>
-document.querySelector('#callDocument').addEventListener('change', function(){
-    var fileName = this.files[0]?.name || 'Choose file';
-    this.nextElementSibling.textContent = fileName;
-});
-</script>
 @endsection
