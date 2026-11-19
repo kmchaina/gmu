@@ -59,13 +59,13 @@ return [
     | Application Timezone
     |--------------------------------------------------------------------------
     |
-    | Here you may specify the default timezone for your application, which
-    | will be used by the PHP date and date-time functions. The timezone
-    | is set to "UTC" by default as it is suitable for most use cases.
+    | Everyone who uses the portal works in Tanzania, so the application keeps
+    | and shows time in East Africa Time. Deadlines entered as a date close
+    | at the end of that day in Dar es Salaam, not at the end of a UTC day.
     |
     */
 
-    'timezone' => 'UTC',
+    'timezone' => env('APP_TIMEZONE', 'Africa/Dar_es_Salaam'),
 
     /*
     |--------------------------------------------------------------------------

@@ -5,7 +5,9 @@ namespace Tests\Feature\SeedGrant;
 use App\Models\Seed\SeedApplication;
 use App\Models\Seed\SeedCall;
 use App\Models\Seed\SeedReviewerAssignment;
+use App\Models\Seed\SeedReviewRound;
 use App\Models\User;
+use Carbon\Carbon;
 use App\Support\SeedGrant as S;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -419,6 +421,35 @@ class SeedGrantWorkflowTest extends TestCase
         $this->actingAs($this->pi)->post(route('seed.applications.submit', $application), $this->conceptForm())->assertSessionHasNoErrors();
         $this->assertSame(S::SUBMITTED, $application->fresh()->status);
         $this->assertSame(1, $this->gmu->notifications()->where('title', 'like', 'Corrected concept note%')->count());
+    }
+
+    public function test_deadlines_close_at_the_end_of_the_day_in_dar_es_salaam(): void
+    {
+        $this->assertSame('Africa/Dar_es_Salaam', config('app.timezone'));
+        $this->call->update(['concept_deadline' => '2026-11-30']);
+        $eat = fn (string $at) => Carbon::parse($at, 'Africa/Dar_es_Salaam');
+
+        // 23:30 in Dar es Salaam on the deadline day: still open.
+        $this->travelTo($eat('2026-11-30 23:30'));
+        $this->assertTrue($this->call->fresh()->acceptingConceptNotes());
+
+        // 00:30 the next morning in Dar es Salaam (still 30 Nov in UTC): closed.
+        $this->travelTo($eat('2026-12-01 00:30'));
+        $this->assertFalse($this->call->fresh()->acceptingConceptNotes());
+    }
+
+    public function test_a_review_is_overdue_only_after_its_due_date_has_ended(): void
+    {
+        $round = new SeedReviewRound(['due_at' => '2026-11-30']);
+
+        $this->travelTo(Carbon::parse('2026-11-30 09:00', 'Africa/Dar_es_Salaam'));
+        $this->assertFalse($round->isOverdue(), 'Reviews due today are not late yet.');
+
+        $this->travelTo(Carbon::parse('2026-12-01 08:00', 'Africa/Dar_es_Salaam'));
+        $this->assertTrue($round->isOverdue());
+
+        $round->decision = 'advance';
+        $this->assertFalse($round->isOverdue(), 'A decided round is never overdue.');
     }
 
     public function test_applicants_in_the_call_and_the_approvers_cannot_review(): void

@@ -105,7 +105,7 @@
                                         @elseif($a->coi_status === 'pending')
                                             <span class="pill pill-warn">Declaration pending</span>
                                         @else
-                                            <span class="pill {{ $round->isOpen() && $round->due_at?->isPast() ? 'pill-danger' : '' }}">{{ $round->isOpen() && $round->due_at?->isPast() ? 'Overdue' : 'Not submitted' }}</span>
+                                            <span class="pill {{ $round->isOverdue() ? 'pill-danger' : '' }}">{{ $round->isOverdue() ? 'Overdue' : 'Not submitted' }}</span>
                                         @endif
                                     </div>
                                     @if($review?->isSubmitted())

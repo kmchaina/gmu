@@ -40,6 +40,12 @@ class SeedReviewRound extends Model
         return $this->decision === null;
     }
 
+    /** Reviews are due by the end of the due date, the same rule as the call deadlines. */
+    public function isOverdue(): bool
+    {
+        return $this->isOpen() && $this->due_at !== null && $this->due_at->copy()->endOfDay()->isPast();
+    }
+
     public function auditLabel(): string
     {
         return ucfirst($this->stage) . ' review round ' . $this->number . ' on ' . ($this->application?->reference ?? '#' . $this->seed_application_id);

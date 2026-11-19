@@ -75,14 +75,14 @@ class DashboardController extends Controller
                     $load[$as->reviewer_id] ??= ['name' => $as->reviewer->name, 'done' => 0, 'total' => 0, 'late' => 0];
                     $load[$as->reviewer_id]['total']++;
                     $load[$as->reviewer_id]['done'] += $done ? 1 : 0;
-                    if (! $done && $round->due_at?->isPast()) {
+                    if (! $done && $round->isOverdue()) {
                         $load[$as->reviewer_id]['late']++;
                         $overdue++;
                     }
                 }
                 if ($this->workflow->roundComplete($round)) {
                     $why = ['Decide', 'warn'];
-                } elseif ($round->due_at?->isPast()) {
+                } elseif ($round->isOverdue()) {
                     $why ??= ['Review overdue', 'danger'];
                 }
             }

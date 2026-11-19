@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "gmu-portal",
+      "runtimeExecutable": "C:/xampp/php/php.exe",
+      "runtimeArgs": ["portal/artisan", "serve", "--host=0.0.0.0", "--port=8010"],
+      "port": 8010
+    },
+    {
+      "name": "gmu-portal-8011",
+      "runtimeExecutable": "C:/xampp/php/php.exe",
+      "runtimeArgs": ["C:/xampp/htdocs/gmu/portal/artisan", "serve", "--host=127.0.0.1", "--port=8011"],
+      "port": 8011
+    }
+  ]
+}
