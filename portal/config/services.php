@@ -44,6 +44,21 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    /*
+     | NREIMS single sign-on (Laravel Passport, authorization-code grant).
+     | In NREIMS, register an oauth_clients row with redirect = NREIMS_REDIRECT_URI
+     | and is_first_party = 1 so staff are not shown a consent screen.
+     | Sign-in with NREIMS appears on the login page once the client id is set.
+     */
+    'nreims' => [
+        'base_url'      => env('NREIMS_BASE_URL'),
+        'client_id'     => env('NREIMS_CLIENT_ID'),
+        'client_secret' => env('NREIMS_CLIENT_SECRET'),
+        'redirect'      => env('NREIMS_REDIRECT_URI'),
+        // New accounts start as applicants; GMU changes roles under People and roles.
+        'default_role'  => env('NREIMS_DEFAULT_ROLE', 'pi'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

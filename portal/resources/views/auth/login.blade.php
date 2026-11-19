@@ -1,54 +1,54 @@
 @extends('layouts.auth')
 
 @section('title', 'Sign in')
+@section('bare', true)
+
+@php
+    // NREIMS single sign-on is the front door once it is configured. The local
+    // email-and-password form is then the administrator fallback, shown on request
+    // or whenever it has just been used and failed.
+    $sso       = app(\App\Services\Auth\NreimsOAuth::class)->enabled();
+    $showLocal = ! $sso || request()->boolean('admin') || $errors->any() || old('email');
+@endphp
 
 @section('content')
-<h2 style="font-size:23px; letter-spacing:-.5px;">Sign in</h2>
-<p class="small muted" style="margin-top:8px;">
-    Accounts are created by the GMU Coordinator. If you do not have one, ask the unit.
-</p>
+    @if(session('status'))
+        <p class="note" style="margin-bottom:16px;">{{ session('status') }}</p>
+    @endif
 
-@if(session('status'))
-    <div class="alert alert-info" style="margin-top:20px;">
-        <i class="fas fa-info-circle"></i><span>{{ session('status') }}</span>
-    </div>
-@endif
+    @if(session('sso_error'))
+        <p class="note is-error" role="alert" style="margin-bottom:16px;">{{ session('sso_error') }}</p>
+    @endif
 
-@if($errors->any())
-    <div class="alert alert-error" style="margin-top:20px;">
-        <i class="fas fa-exclamation-circle"></i>
-        <div>
-            @foreach($errors->all() as $message)<div>{{ $message }}</div>@endforeach
-        </div>
-    </div>
-@endif
+    @if($errors->any())
+        <p class="note is-error" role="alert" style="margin-bottom:16px;">{{ $errors->first() }}</p>
+    @endif
 
-<form method="POST" action="{{ route('login') }}" style="margin-top:24px;">
-    @csrf
+    @if($showLocal)
+        <form method="POST" action="{{ route('login') }}" style="display:flex; flex-direction:column; gap:12px;">
+            @csrf
+            <label for="email" class="sr-only">Email</label>
+            <input id="email" type="email" name="email" class="input-light" value="{{ old('email') }}" placeholder="Email"
+                   required autofocus autocomplete="username">
+            <label for="password" class="sr-only">Password</label>
+            <input id="password" type="password" name="password" class="input-light" placeholder="Password"
+                   required autocomplete="current-password">
+            <input type="hidden" name="remember" value="0">
+            <button type="submit" class="btn {{ $sso ? 'btn-dark' : 'btn-light' }}" style="margin-top:4px;">Sign in</button>
+        </form>
 
-    <div class="stack-sm">
-        <x-ui.field label="Email" name="email" required>
-            <input type="email" name="email" class="input" value="{{ old('email') }}" required autofocus autocomplete="username">
-        </x-ui.field>
-
-        <x-ui.field label="Password" name="password" required>
-            <input type="password" name="password" class="input" required autocomplete="current-password">
-        </x-ui.field>
-
-        <div class="row-between" style="margin-top:4px;">
-            <label class="check">
-                <input type="checkbox" name="remember"> <span class="small">Keep me signed in</span>
-            </label>
+        <div style="display:flex; justify-content:center; gap:16px; margin-top:8px; flex-wrap:wrap;">
+            @if($sso)
+                <a href="{{ route('login') }}" class="link-light">Back</a>
+            @endif
             @if(Route::has('password.request'))
-                <a href="{{ route('password.request') }}" class="small">Forgotten password?</a>
+                <a href="{{ route('password.request') }}" class="link-light">Forgotten password?</a>
             @endif
         </div>
-
-        <button class="btn btn-primary btn-block" style="margin-top:10px; padding:11px;">Sign in</button>
-    </div>
-</form>
-
-<p class="tiny muted-3" style="margin-top:28px; line-height:1.7;">
-    This is an institutional system. Activity is logged, including sign-in attempts.
-</p>
+    @else
+        <a href="{{ route('nreims.redirect') }}" class="btn btn-light">Sign in with NREIMS</a>
+        <div style="text-align:center; margin-top:16px;">
+            <a href="{{ route('login', ['admin' => 1]) }}" class="link-light">Administrator sign-in</a>
+        </div>
+    @endif
 @endsection

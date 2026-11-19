@@ -7,7 +7,7 @@
 <style>
   body { font-family: Arial, sans-serif; background:#f4f4f4; margin:0; padding:0; }
   .wrapper { max-width:640px; margin:30px auto; background:#fff; border-radius:6px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.1); }
-  .header  { background:#003366; color:#fff; padding:24px 32px; }
+  .header  { background:#2664EB; color:#fff; padding:24px 32px; }
   .header h1 { margin:0; font-size:20px; }
   .header p  { margin:4px 0 0; font-size:13px; opacity:.85; }
   .body    { padding:28px 32px; }
@@ -25,7 +25,7 @@
   .urgent  { color:#c0392b; }
   .footer  { background:#f8f8f8; padding:16px 32px; font-size:12px; color:#888; border-top:1px solid #eee; }
   .cta     { margin:24px 0 0; text-align:center; }
-  .cta a   { background:#003366; color:#fff; text-decoration:none; padding:11px 28px; border-radius:4px; font-size:14px; }
+  .cta a   { background:#2664EB; color:#fff; text-decoration:none; padding:11px 28px; border-radius:4px; font-size:14px; }
 </style>
 </head>
 <body>

@@ -7,17 +7,17 @@
 <style>
   body { font-family: Arial, sans-serif; background:#f4f4f4; margin:0; padding:0; }
   .wrapper { max-width:660px; margin:30px auto; background:#fff; border-radius:6px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.1); }
-  .header  { background:#003366; color:#fff; padding:24px 32px; }
+  .header  { background:#2664EB; color:#fff; padding:24px 32px; }
   .header h1 { margin:0; font-size:20px; }
   .header p  { margin:6px 0 0; font-size:13px; opacity:.85; }
   .body    { padding:28px 32px; }
   .greeting { font-size:16px; margin-bottom:18px; }
   .stats-grid { display:flex; gap:12px; margin-bottom:28px; flex-wrap:wrap; }
-  .stat-card  { flex:1; min-width:120px; background:#f8f9fa; border-radius:6px; padding:14px 16px; text-align:center; border-top:3px solid #003366; }
+  .stat-card  { flex:1; min-width:120px; background:#f8f9fa; border-radius:6px; padding:14px 16px; text-align:center; border-top:3px solid #2664EB; }
   .stat-card.danger  { border-color:#c0392b; }
   .stat-card.warning { border-color:#f39c12; }
   .stat-card.success { border-color:#27ae60; }
-  .stat-card .num { font-size:28px; font-weight:700; color:#003366; }
+  .stat-card .num { font-size:28px; font-weight:700; color:#2664EB; }
   .stat-card.danger  .num { color:#c0392b; }
   .stat-card.warning .num { color:#f39c12; }
   .stat-card.success .num { color:#27ae60; }
@@ -33,7 +33,7 @@
   .overdue-label { color:#c0392b; font-weight:600; }
   .none-msg { color:#aaa; font-style:italic; font-size:13px; padding:8px 0; }
   .cta     { margin:24px 0 0; text-align:center; }
-  .cta a   { background:#003366; color:#fff; text-decoration:none; padding:11px 28px; border-radius:4px; font-size:14px; }
+  .cta a   { background:#2664EB; color:#fff; text-decoration:none; padding:11px 28px; border-radius:4px; font-size:14px; }
   .footer  { background:#f8f8f8; padding:16px 32px; font-size:12px; color:#888; border-top:1px solid #eee; }
 </style>
 </head>

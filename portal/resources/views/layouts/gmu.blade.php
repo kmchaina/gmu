@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', 'Dashboard') · NIMR GMU</title>
+    <title>@yield('title', 'Dashboard') · NIMR Grants</title>
+    <link rel="icon" type="image/png" href="{{ asset('images/nimr-logo.png') }}">
 
     {{-- Everything is served from this application: the portal has to render
          correctly on a network with no route to the internet. --}}
@@ -17,134 +18,130 @@
     $user     = auth()->user();
     $unread   = $user->unreadNotificationsCount();
     $initials = collect(explode(' ', $user->name))->take(2)->map(fn($p) => mb_substr($p, 0, 1))->implode('');
+    $external = config('gmu.external_grants');
+
+    // Seed grant items come first, by role (App\Support\SeedNav).
+    $seedGroups = \App\Support\SeedNav::groups($user);
+
+    // The rest of the side panel, as groups of [label, route, icon, active-pattern, visible].
+    $groups = [
+        'Insights' => [
+            ['Analytics', 'analytics', 'fa-chart-line', 'analytics', $external && Gate::allows('view-analytics')],
+        ],
+        'Grant opportunities' => [
+            ['Funding calls', 'calls.index', 'fa-bullhorn', 'calls.*', $external],
+            ['Donors', 'donors.index', 'fa-handshake', 'donors.*', $external && $user->hasAnyRole(['coordinator', 'planning_officer'])],
+        ],
+        'Proposals' => [
+            ['Proposals', 'proposals.index', 'fa-file-alt', 'proposals.*', $external],
+            ['Proposal library', 'library.index', 'fa-book-open', 'library.*', $external],
+            [$user->isGmuStaff() ? 'Researchers' : 'My research profile', 'researchers.index', 'fa-user-graduate', 'researchers.*', $external],
+        ],
+        'Awards and compliance' => [
+            ['Active awards', 'awards.index', 'fa-trophy', 'awards.*', $external],
+            ['Reports', 'reports.index', 'fa-file-invoice', 'reports.*', $external],
+        ],
+        'Library' => [
+            ['Documents', 'documents.index', 'fa-folder-open', 'documents.*', $external],
+            ['Donor policies', 'donor-policies.index', 'fa-book', 'donor-policies.*', $external],
+            ['AI hub', 'ai.hub', 'fa-robot', 'ai.*', $external && Gate::allows('view-analytics')],
+        ],
+        'Administration' => [
+            ['People and roles', 'admin.users.index', 'fa-users-cog', 'admin.users.*', $user->isCoordinator()],
+            ['Audit register', 'admin.activity-log.index', 'fa-history', 'admin.activity-log.*', $user->isCoordinator()],
+        ],
+    ];
 @endphp
 
 <div class="shell">
 
-    <aside class="sidebar">
-        <div class="sidebar-head">
-            <div class="sidebar-mark"><i class="fas fa-university"></i></div>
-            <div>
-                <span class="sidebar-name">NIMR GMU</span>
+    <aside class="sidebar" id="sidebar" aria-label="Sidebar">
+        <a href="{{ route('dashboard') }}" class="sidebar-head">
+            <img src="{{ asset('images/nimr-logo.png') }}" alt="" class="sidebar-logo">
+            <span>
+                <span class="sidebar-name">NIMR Grants</span>
                 <span class="sidebar-sub">Grants Management Unit</span>
-            </div>
-        </div>
+            </span>
+        </a>
 
-        <nav class="sidebar-nav">
-            <div class="nav-group">Main</div>
-            <a href="{{ route('dashboard') }}" class="nav-link {{ request()->routeIs('dashboard') ? 'is-active' : '' }}">
-                <i class="fas fa-th-large"></i> Dashboard
-            </a>
-            @can('view-analytics')
-                <a href="{{ route('analytics') }}" class="nav-link {{ request()->routeIs('analytics') ? 'is-active' : '' }}">
-                    <i class="fas fa-chart-line"></i> Analytics
-                </a>
-            @endcan
-
-            <div class="nav-group">Grant opportunities</div>
-            <a href="{{ route('calls.index') }}" class="nav-link {{ request()->routeIs('calls.*') ? 'is-active' : '' }}">
-                <i class="fas fa-bullhorn"></i> Funding Calls
-            </a>
-            @if($user->hasAnyRole(['coordinator', 'planning_officer']))
-                <a href="{{ route('donors.index') }}" class="nav-link {{ request()->routeIs('donors.*') ? 'is-active' : '' }}">
-                    <i class="fas fa-handshake"></i> Donors
-                </a>
-            @endif
-
-            <div class="nav-group">Proposals</div>
-            <a href="{{ route('proposals.index') }}" class="nav-link {{ request()->routeIs('proposals.*') ? 'is-active' : '' }}">
-                <i class="fas fa-file-alt"></i> Proposals
-            </a>
-            <a href="{{ route('library.index') }}" class="nav-link {{ request()->routeIs('library.*') ? 'is-active' : '' }}">
-                <i class="fas fa-book-open"></i> Proposal Library
-            </a>
-            <a href="{{ route('researchers.index') }}" class="nav-link {{ request()->routeIs('researchers.*') ? 'is-active' : '' }}">
-                <i class="fas fa-user-graduate"></i> {{ $user->isGmuStaff() ? 'Researchers' : 'My Profile' }}
+        <nav class="sidebar-nav" aria-label="Main">
+            <div class="nav-group">Overview</div>
+            <a href="{{ route('dashboard') }}" class="nav-link {{ request()->routeIs('dashboard') ? 'is-active' : '' }}" @if(request()->routeIs('dashboard')) aria-current="page" @endif>
+                <i class="fas fa-th-large" aria-hidden="true"></i> Dashboard
             </a>
 
-            <div class="nav-group">Awards &amp; compliance</div>
-            <a href="{{ route('awards.index') }}" class="nav-link {{ request()->routeIs('awards.*') ? 'is-active' : '' }}">
-                <i class="fas fa-trophy"></i> Active Awards
-            </a>
-            <a href="{{ route('reports.index') }}" class="nav-link {{ request()->routeIs('reports.*') ? 'is-active' : '' }}">
-                <i class="fas fa-file-invoice"></i> Reports
-            </a>
+            @foreach($seedGroups as $heading => $items)
+                <div class="nav-group">{{ $heading }}</div>
+                @foreach($items as [$label, $url, $icon, $pattern, $count, $alert])
+                    @php $active = request()->routeIs(...explode('|', $pattern)); @endphp
+                    <a href="{{ $url }}" class="nav-link {{ $active ? 'is-active' : '' }}" @if($active) aria-current="page" @endif>
+                        <i class="fas {{ $icon }}" aria-hidden="true"></i> {{ $label }}
+                        @if($count !== null)<span class="nav-count {{ $alert ? 'is-alert' : '' }}">{{ $count }}</span>@endif
+                    </a>
+                @endforeach
+            @endforeach
 
-            <div class="nav-group">Library</div>
-            <a href="{{ route('documents.index') }}" class="nav-link {{ request()->routeIs('documents.*') ? 'is-active' : '' }}">
-                <i class="fas fa-folder-open"></i> Document Repository
-            </a>
-            <a href="{{ route('donor-policies.index') }}" class="nav-link {{ request()->routeIs('donor-policies.*') ? 'is-active' : '' }}">
-                <i class="fas fa-book"></i> Donor Policies
-            </a>
-
-            @can('view-analytics')
-                <div class="nav-group">Intelligence</div>
-                <a href="{{ route('ai.hub') }}" class="nav-link {{ request()->routeIs('ai.*') ? 'is-active' : '' }}">
-                    <i class="fas fa-robot"></i> AI Intelligence Hub
-                </a>
-            @endcan
-
-            @if($user->isCoordinator())
-                <div class="nav-group">Administration</div>
-                <a href="{{ route('admin.users.index') }}" class="nav-link {{ request()->routeIs('admin.users.*') ? 'is-active' : '' }}">
-                    <i class="fas fa-users-cog"></i> User Management
-                </a>
-                <a href="{{ route('admin.activity-log.index') }}" class="nav-link {{ request()->routeIs('admin.activity-log.*') ? 'is-active' : '' }}">
-                    <i class="fas fa-history"></i> Audit Log
-                </a>
-            @endif
-
-            <div class="nav-group">Account</div>
-            <a href="{{ route('notifications.index') }}" class="nav-link {{ request()->routeIs('notifications.*') ? 'is-active' : '' }}">
-                <i class="fas fa-bell"></i> Notifications
-                @if($unread > 0)<span class="nav-count">{{ $unread > 99 ? '99+' : $unread }}</span>@endif
-            </a>
-            <a href="{{ route('profile.edit') }}" class="nav-link {{ request()->routeIs('profile.*') ? 'is-active' : '' }}">
-                <i class="fas fa-user-cog"></i> My Account
-            </a>
-            <form method="POST" action="{{ route('logout') }}">
-                @csrf
-                <button type="submit" class="nav-link" style="width:100%; border:0; background:none; cursor:pointer; text-align:left;">
-                    <i class="fas fa-sign-out-alt"></i> Sign out
-                </button>
-            </form>
+            @foreach($groups as $heading => $items)
+                @php $shown = array_filter($items, fn($i) => $i[4]); @endphp
+                @continue(empty($shown))
+                <div class="nav-group">{{ $heading }}</div>
+                @foreach($shown as [$label, $route, $icon, $pattern])
+                    @php $active = request()->routeIs($pattern); @endphp
+                    <a href="{{ route($route) }}" class="nav-link {{ $active ? 'is-active' : '' }}" @if($active) aria-current="page" @endif>
+                        <i class="fas {{ $icon }}" aria-hidden="true"></i> {{ $label }}
+                    </a>
+                @endforeach
+            @endforeach
         </nav>
 
-        <div class="sidebar-foot">
-            <span>National Institute for Medical Research</span>
-            <span class="mono">Reporting currency {{ \App\Support\Money::base() }}</span>
-        </div>
+        @hasSection('sidebar-foot')
+            <div class="sidebar-foot">@yield('sidebar-foot')</div>
+        @endif
     </aside>
+    <div class="nav-backdrop" data-nav-close></div>
 
     <div class="main">
         <header class="topbar">
-            <div>
-                <div class="topbar-crumb">@yield('crumb', 'Grants Management Unit')</div>
-                <div class="topbar-title">@yield('title', 'Dashboard')</div>
+            <div class="topbar-left">
+                <button type="button" class="icon-btn menu-btn" aria-label="Open menu" aria-controls="sidebar" data-nav-toggle>
+                    <i class="fas fa-bars" aria-hidden="true"></i>
+                </button>
+                @if($external)
+                    <form class="topbar-search" method="GET" action="{{ route('awards.index') }}" role="search">
+                        <i class="fas fa-search" aria-hidden="true"></i>
+                        <input type="search" name="search" placeholder="Search awards" value="{{ request('search') }}" aria-label="Search awards">
+                    </form>
+                @else
+                    <span class="topbar-context">@yield('context', 'National Institute for Medical Research')</span>
+                @endif
             </div>
 
             <div class="topbar-right">
-                <form class="topbar-search" method="GET" action="{{ route('awards.index') }}">
-                    <i class="fas fa-search"></i>
-                    <input type="search" name="search" placeholder="Search awards" value="{{ request('search') }}"
-                           aria-label="Search awards">
-                </form>
-
-                <a href="{{ route('notifications.index') }}" class="bell" aria-label="Notifications">
-                    <i class="fas fa-bell"></i>
-                    @if($unread > 0)<span class="bell-count">{{ $unread > 9 ? '9+' : $unread }}</span>@endif
+                <a href="{{ route('notifications.index') }}" class="icon-btn" aria-label="Notifications{{ $unread ? ", {$unread} unread" : '' }}">
+                    <i class="far fa-bell" aria-hidden="true"></i>
+                    @if($unread > 0)<span class="icon-count">{{ $unread > 9 ? '9+' : $unread }}</span>@endif
                 </a>
 
-                <div class="topbar-divider"></div>
+                <span class="topbar-divider" aria-hidden="true"></span>
 
-                <a href="{{ route('profile.edit') }}" class="row" style="gap:10px; color:inherit; text-decoration:none;">
-                    <div class="avatar">{{ strtoupper($initials) }}</div>
-                    <div>
-                        <div class="user-name">{{ $user->name }}</div>
-                        <div class="user-role">{{ $user->role?->display_name ?? 'No role assigned' }}</div>
+                <details class="user-menu">
+                    <summary aria-label="Account menu">
+                        <span class="avatar">{{ strtoupper($initials) }}</span>
+                        <span class="user-text">
+                            <span class="user-name" style="display:block;">{{ $user->name }}</span>
+                            <span class="user-role" style="display:block;">{{ $user->role?->display_name ?? 'No role assigned' }}</span>
+                        </span>
+                        <i class="fas fa-chevron-down" aria-hidden="true" style="font-size:11px; color:var(--muted-2);"></i>
+                    </summary>
+                    <div class="user-pop">
+                        <a href="{{ route('profile.edit') }}"><i class="far fa-user" aria-hidden="true"></i> My account</a>
+                        <a href="{{ route('notifications.index') }}"><i class="far fa-bell" aria-hidden="true"></i> Notifications</a>
+                        <form method="POST" action="{{ route('logout') }}">
+                            @csrf
+                            <button type="submit"><i class="fas fa-sign-out-alt" aria-hidden="true"></i> Sign out</button>
+                        </form>
                     </div>
-                </a>
+                </details>
             </div>
         </header>
 
@@ -175,6 +172,21 @@
     </div>
 </div>
 
+<script>
+    // Small screens: the side panel slides in over the page.
+    (function () {
+        var body = document.body;
+        document.querySelectorAll('[data-nav-toggle]').forEach(function (b) {
+            b.addEventListener('click', function () { body.classList.toggle('nav-open'); });
+        });
+        document.querySelectorAll('[data-nav-close]').forEach(function (b) {
+            b.addEventListener('click', function () { body.classList.remove('nav-open'); });
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { body.classList.remove('nav-open'); }
+        });
+    })();
+</script>
 @stack('scripts')
 </body>
 </html>

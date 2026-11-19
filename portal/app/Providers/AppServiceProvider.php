@@ -68,5 +68,14 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('view-analytics', fn ($user) =>
             $user->hasAnyRole(['coordinator', 'planning_officer', 'finance_officer'])
         );
+
+        // Seed grant: GMU runs the call; DRCP and the DG approve.
+        Gate::define('manage-seed-grants', fn ($user) =>
+            $user->hasAnyRole(['coordinator', 'planning_officer'])
+        );
+        Gate::define('approve-seed-grants', fn ($user) =>
+            $user->hasAnyRole(['drcp', 'dg'])
+        );
+        Gate::policy(\App\Models\Seed\SeedApplication::class, \App\Policies\SeedApplicationPolicy::class);
     }
 }

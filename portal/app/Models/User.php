@@ -35,9 +35,15 @@ class User extends Authenticatable
     protected $fillable = [
         'name', 'email', 'password', 'role_id', 'phone', 'department', 'research_center',
         'is_active', 'must_change_password',
+        'designation', 'employment_type', 'first_appointment_date',
     ];
 
     protected $hidden = ['password', 'remember_token'];
+
+    /** Lead applicants must have served at NIMR for less than this many years. */
+    public const MAX_SERVICE_YEARS_FOR_SEED_GRANT = 5;
+
+    public const EMPLOYMENT_TYPES = ['permanent' => 'Permanent', 'contract' => 'Contract'];
 
     protected function casts(): array
     {
@@ -46,13 +52,50 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_active' => 'boolean',
             'must_change_password' => 'boolean',
+            'first_appointment_date' => 'date',
+            'profile_completed_at' => 'datetime',
+            'last_login_at' => 'datetime',
         ];
     }
 
     /** Account changes — role, activation, credentials — are audit-relevant (finding M16). */
     protected function auditableFields(): array
     {
-        return ['name', 'email', 'role_id', 'phone', 'department', 'research_center', 'is_active'];
+        return ['name', 'email', 'role_id', 'phone', 'department', 'research_center', 'is_active',
+            'designation', 'employment_type', 'first_appointment_date', 'nreims_id'];
+    }
+
+    /** Signed in through NREIMS at least once. */
+    public function isNreimsLinked(): bool
+    {
+        return $this->nreims_id !== null;
+    }
+
+    /** NREIMS accounts confirm their post on first sign-in; local accounts are set up by GMU. */
+    public function needsProfileCompletion(): bool
+    {
+        return $this->isNreimsLinked() && $this->profile_completed_at === null;
+    }
+
+    /** Whole years and months since first appointment, or null if not given. */
+    public function serviceLength(): ?array
+    {
+        if (! $this->first_appointment_date) {
+            return null;
+        }
+        $diff = $this->first_appointment_date->diff(now());
+
+        return ['years' => $diff->y, 'months' => $diff->m];
+    }
+
+    /** Under the service limit for leading a seed grant application. */
+    public function withinSeedGrantServiceLimit(): ?bool
+    {
+        if (! $this->first_appointment_date) {
+            return null;
+        }
+
+        return $this->first_appointment_date->copy()->addYears(self::MAX_SERVICE_YEARS_FOR_SEED_GRANT)->isFuture();
     }
 
     public function auditLabel(): string

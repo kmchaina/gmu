@@ -5,6 +5,8 @@ use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\EmailVerificationPromptController;
 use App\Http\Controllers\Auth\NewPasswordController;
+use App\Http\Controllers\Auth\NreimsLoginController;
+use App\Http\Controllers\Auth\ProfileCompletionController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\VerifyEmailController;
@@ -18,6 +20,12 @@ Route::middleware('guest')->group(function () {
         ->name('login');
 
     Route::post('login', [AuthenticatedSessionController::class, 'store']);
+
+    // NREIMS single sign-on: the front door for everyone (see NreimsLoginController).
+    Route::middleware('throttle:20,1')->group(function () {
+        Route::get('auth/nreims', [NreimsLoginController::class, 'redirect'])->name('nreims.redirect');
+        Route::get('auth/nreims/callback', [NreimsLoginController::class, 'callback'])->name('nreims.callback');
+    });
 
     Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
         ->name('password.request');
@@ -33,6 +41,10 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::middleware('auth')->group(function () {
+    // First sign-in through NREIMS: confirm post, centre and appointment date.
+    Route::get('welcome', [ProfileCompletionController::class, 'edit'])->name('profile.complete');
+    Route::post('welcome', [ProfileCompletionController::class, 'update'])->name('profile.complete.store');
+
     Route::get('verify-email', EmailVerificationPromptController::class)
         ->name('verification.notice');
 

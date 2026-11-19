@@ -3,73 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@yield('title', 'Sign in') · NIMR GMU</title>
+    <title>@yield('title', 'Sign in') · NIMR Grants</title>
+    <link rel="icon" type="image/png" href="{{ asset('images/nimr-logo.png') }}">
 
     <link rel="stylesheet" href="{{ asset('vendor/fontawesome-free/css/all.min.css') }}">
     <link rel="stylesheet" href="{{ asset('css/gmu.css') }}?v={{ filemtime(public_path('css/gmu.css')) }}">
 
     <style>
-        .auth { display:flex; min-height:100vh; }
-        .auth-brand {
-            flex:1 1 46%; background:var(--navy-900); color:#fff; padding:56px 56px 44px;
-            display:flex; flex-direction:column; justify-content:space-between;
-            background-image:radial-gradient(circle at 15% 12%, rgba(0,85,165,.34), transparent 46%),
-                             radial-gradient(circle at 85% 82%, rgba(0,168,107,.16), transparent 42%);
-        }
-        .auth-form { flex:1 1 54%; display:flex; align-items:center; justify-content:center; padding:40px 24px; }
-        .auth-card { width:100%; max-width:404px; }
-        .auth-mark { width:44px; height:44px; border-radius:12px; background:linear-gradient(145deg,var(--navy-500),var(--navy-700));
-            display:flex; align-items:center; justify-content:center; font-size:17px; }
-        .auth-points { display:flex; flex-direction:column; gap:16px; margin-top:34px; }
-        .auth-point { display:flex; gap:13px; align-items:flex-start; }
-        .auth-point i { color:var(--green); margin-top:3px; font-size:12px; }
-        .auth-point span { color:rgba(255,255,255,.68); font-size:13.5px; line-height:1.6; }
-        @media (max-width:900px) { .auth-brand { display:none; } }
+        body { background:var(--brand); }
+        .auth { min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+            padding:48px 24px; color:#fff; }
+        .auth-col { width:100%; max-width:380px; display:flex; flex-direction:column; align-items:center; text-align:center; }
+        .auth-logo { width:112px; height:112px; object-fit:contain; border-radius:50%; background:#fff; padding:4px; }
+        .auth-title { margin-top:24px; font-size:28px; letter-spacing:-0.02em; }
+        .auth-sub { margin-top:6px; font-size:15px; color:var(--blue-50); }
+        .auth-body { width:100%; margin-top:40px; text-align:left; }
+        .auth-foot { margin-top:64px; font-size:12px; color:var(--blue-50); }
+
+        /* Buttons and fields that sit straight on the blue */
+        .auth .btn-light { width:100%; min-height:52px; border:0; border-radius:12px; background:#fff; color:var(--blue-700);
+            font-size:15px; font-weight:600; }
+        .auth .btn-light:hover { background:var(--blue-50); color:var(--blue-800); }
+        .auth .btn-dark { width:100%; min-height:52px; border:0; border-radius:12px; background:var(--panel); color:#fff;
+            font-size:15px; font-weight:600; }
+        .auth .btn-dark:hover { background:var(--panel-hover); color:#fff; }
+        .auth .input-light { width:100%; min-height:50px; padding:10px 14px; border:1px solid transparent; border-radius:12px;
+            background:#fff; color:var(--ink); font-size:15px; }
+        .auth .input-light::placeholder { color:var(--muted-2); }
+        .auth .input-light:focus { outline:3px solid var(--blue-200); outline-offset:0; }
+        .auth .link-light { display:inline-flex; align-items:center; min-height:44px; padding:0 4px; background:none; border:0;
+            color:var(--blue-50); font-size:14px; font-weight:500; cursor:pointer; }
+        .auth .link-light:hover { color:#fff; text-decoration:underline; }
+        .auth .note { padding:12px 14px; border-radius:12px; background:rgba(14,26,58,.35); color:#fff; font-size:14px; }
+        .auth .note.is-error { background:#FDECEC; color:var(--danger-ink); }
+
+        /* Pages other than sign-in keep their forms on a white card */
+        .auth-card { background:#fff; color:var(--ink); border-radius:16px; padding:28px; box-shadow:var(--shadow-lg); }
     </style>
 </head>
 <body>
 <div class="auth">
-    <aside class="auth-brand">
-        <div>
-            <div class="row" style="gap:14px;">
-                <div class="auth-mark"><i class="fas fa-university"></i></div>
-                <div>
-                    <div style="font-size:15px; font-weight:600; letter-spacing:.2px;">NIMR</div>
-                    <div style="font-size:11px; color:rgba(255,255,255,.45);">Grants Management Unit</div>
-                </div>
-            </div>
+    <div class="auth-col">
+        <img src="{{ asset('images/nimr-logo.png') }}" alt="National Institute for Medical Research logo" class="auth-logo">
+        <h1 class="auth-title">NIMR Grants</h1>
+        <p class="auth-sub">Grants Management Unit</p>
 
-            <h1 style="margin-top:52px; font-size:29px; line-height:1.28; letter-spacing:-.7px; max-width:16ch;">
-                One place for every grant NIMR holds.
-            </h1>
-
-            <div class="auth-points">
-                <div class="auth-point">
-                    <i class="fas fa-check"></i>
-                    <span>Funding calls, the proposal pipeline, and institutional approval through to the Director General.</span>
-                </div>
-                <div class="auth-point">
-                    <i class="fas fa-check"></i>
-                    <span>Award compliance: reporting calendars, ethics renewals, sub-awards and the expenditure ledger.</span>
-                </div>
-                <div class="auth-point">
-                    <i class="fas fa-check"></i>
-                    <span>Closeout and lessons learned, so what one grant teaches carries into the next.</span>
-                </div>
-            </div>
+        <div class="auth-body">
+            @hasSection('bare')
+                @yield('content')
+            @else
+                <div class="auth-card">@yield('content')</div>
+            @endif
         </div>
+    </div>
 
-        <div style="font-size:11px; color:rgba(255,255,255,.34); line-height:1.7;">
-            National Institute for Medical Research<br>
-            Established under the NIMR Act [Cap. 59 R.E. 2023]
-        </div>
-    </aside>
-
-    <main class="auth-form">
-        <div class="auth-card">
-            @yield('content')
-        </div>
-    </main>
+    <p class="auth-foot">National Institute for Medical Research</p>
 </div>
 </body>
 </html>

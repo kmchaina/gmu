@@ -24,6 +24,12 @@ class DashboardController extends Controller
     {
         $user = auth()->user();
 
+        // Both dashboards below are built on the external grants modules. While
+        // those are switched off, everyone lands on the seed grant dashboard.
+        if (! config('gmu.external_grants')) {
+            return app(SeedGrant\DashboardController::class)->render($user);
+        }
+
         return $user->isGmuStaff()
             ? $this->officeDashboard()
             : $this->researcherDashboard($user, $riskEngine);
