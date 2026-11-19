@@ -58,7 +58,10 @@ class NreimsOAuth
     /**
      * The signed-in NREIMS user, reduced to the fields this portal uses.
      *
-     * @return array{id:int, name:string, email:?string, phone:?string}
+     * `verified` is whether NREIMS has confirmed the email address belongs to
+     * the person (NREIMS users must click a link sent to it).
+     *
+     * @return array{id:int, name:string, email:?string, phone:?string, verified:bool}
      */
     public function user(string $token): array
     {
@@ -79,6 +82,7 @@ class NreimsOAuth
             'name'  => $name !== '' ? $name : ($raw['name'] ?? ''),
             'email' => isset($raw['email']) ? mb_strtolower(trim($raw['email'])) : null,
             'phone' => $raw['phone'] ?? null,
+            'verified' => ! empty($raw['email_verified_at']),
         ];
     }
 

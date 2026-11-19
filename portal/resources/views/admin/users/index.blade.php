@@ -6,9 +6,11 @@
 @section('content')
 <x-ui.page-head
     title="User management"
-    :lede="$users->total() . ' ' . Str::plural('account', $users->total()) . ' · accounts are created here, never by self-registration'">
+    :lede="$users->total() . ' ' . Str::plural('account', $users->total()) . ($sso
+        ? ' · people appear here when they first sign in with NREIMS, or when you add them'
+        : ' · accounts are created here, never by self-registration')">
     <x-slot:actions>
-        <a href="{{ route('admin.users.create') }}" class="btn btn-primary"><i class="fas fa-user-plus"></i> Create an account</a>
+        <a href="{{ route('admin.users.create') }}" class="btn btn-primary"><i class="fas fa-user-plus"></i> {{ $sso ? 'Add a person' : 'Create an account' }}</a>
     </x-slot:actions>
 </x-ui.page-head>
 
@@ -36,7 +38,7 @@
         <div class="table-wrap">
             <table class="table">
                 <thead>
-                    <tr><th>Person</th><th>Role</th><th>Department</th><th>Status</th><th>Password</th><th></th></tr>
+                    <tr><th>Person</th><th>Role</th><th>Department</th><th>Status</th><th>Sign-in</th><th></th></tr>
                 </thead>
                 <tbody>
                     @forelse($users as $user)
@@ -59,10 +61,18 @@
                                 </x-ui.pill>
                             </td>
                             <td class="small">
-                                @if($user->must_change_password)
-                                    <span class="text-warn">Must change at next sign-in</span>
+                                @if($user->nreims_id)
+                                    <span>NREIMS</span>
+                                    <div class="tiny muted-3">{{ $user->last_login_at ? 'Last in ' . $user->last_login_at->diffForHumans() : 'Linked' }}</div>
+                                @elseif($user->must_change_password)
+                                    <span>Local password</span>
+                                    <div class="tiny text-warn">Must change at next sign-in</div>
+                                @elseif(! $user->last_login_at)
+                                    <span class="text-warn" style="white-space:nowrap;">Not signed in yet</span>
+                                    @if($sso)<div class="tiny muted-3" style="white-space:nowrap;">Links at first NREIMS sign-in</div>@endif
                                 @else
-                                    <span class="muted-3">Set by the user</span>
+                                    <span>Local password</span>
+                                    <div class="tiny muted-3">Last in {{ $user->last_login_at->diffForHumans() }}</div>
                                 @endif
                             </td>
                             <td class="num">

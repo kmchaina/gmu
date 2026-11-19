@@ -17,8 +17,14 @@ use Throwable;
  * Everyone signs in through NREIMS. The local email-and-password form stays
  * only as the GMU administrator's fallback for when NREIMS is unavailable.
  *
- * Accounts are matched on the NREIMS user id, never on email alone: an email
- * typed into NREIMS must not be enough to take over a portal account.
+ * NREIMS only proves who the person is. Everything else (roles, profile,
+ * reviewer assignments) lives here, and GMU can add people before they have
+ * ever signed in.
+ *
+ * Accounts are matched on the NREIMS user id. An email is used only once, to
+ * link an account GMU added in advance, and only when NREIMS has verified that
+ * email and the account is not already linked to another NREIMS user. An
+ * unverified NREIMS email never gets in at all.
  */
 class NreimsLoginController extends Controller
 {
@@ -59,26 +65,36 @@ class NreimsLoginController extends Controller
             return $this->fail('We could not reach NREIMS to sign you in. Please try again in a few minutes.');
         }
 
-        $user = User::withTrashed()->where('nreims_id', $remote['id'])->first();
+        if (! $remote['email']) {
+            return $this->fail('Your NREIMS account has no email address. Add one in NREIMS, then sign in again.');
+        }
 
-        if ($user?->trashed() || ($user && ! $user->is_active)) {
+        if (! $remote['verified']) {
+            return $this->fail('NREIMS has not confirmed your email address yet. Open the confirmation link NREIMS emailed you, then sign in again.');
+        }
+
+        $user     = User::withTrashed()->where('nreims_id', $remote['id'])->first();
+        $byEmail  = $user ? null : User::withTrashed()->where('email', $remote['email'])->first();
+
+        if ($byEmail && $byEmail->nreims_id !== null) {
+            // The address belongs to an account another NREIMS user already holds.
+            Log::notice('NREIMS sign-in email belongs to a different NREIMS user', ['nreims_id' => $remote['id']]);
+
+            return $this->fail('A NIMR Grants account already uses ' . $remote['email'] . ' with a different NREIMS account. Contact the Grants Management Unit.');
+        }
+
+        $account = $user ?? $byEmail;
+
+        if ($account?->trashed() || ($account && ! $account->is_active)) {
             return $this->fail('Your NIMR Grants account has been deactivated. Contact the Grants Management Unit.');
         }
 
-        if (! $user) {
-            if (! $remote['email']) {
-                return $this->fail('Your NREIMS account has no email address. Add one in NREIMS, then sign in again.');
-            }
-
-            if (User::withTrashed()->where('email', $remote['email'])->exists()) {
-                Log::notice('NREIMS sign-in matched an unlinked portal email', ['nreims_id' => $remote['id']]);
-
-                return $this->fail('A NIMR Grants account already uses ' . $remote['email'] . '. Ask the Grants Management Unit to link it to your NREIMS account.');
-            }
-
-            $user = $this->createAccount($remote);
-        } else {
+        if ($user) {
             $this->refreshAccount($user, $remote);
+        } elseif ($byEmail) {
+            $user = $this->linkAccount($byEmail, $remote);
+        } else {
+            $user = $this->createAccount($remote);
         }
 
         Auth::login($user);
@@ -102,6 +118,33 @@ class NreimsLoginController extends Controller
             'is_active' => true,
         ]);
         $user->forceFill(['nreims_id' => $remote['id'], 'email_verified_at' => now()])->save();
+
+        return $user;
+    }
+
+    /**
+     * First NREIMS sign-in by someone GMU added in advance: tie the account to
+     * this NREIMS user for good. Role and details set by GMU are kept.
+     *
+     * Staff and reviewers GMU added skip the first-sign-in profile form (it asks
+     * for NIMR appointment details an external reviewer does not have); only
+     * applicants are asked, because the seed grant's eligibility rests on it.
+     * From now on they sign in through NREIMS, so a password GMU set is moot.
+     */
+    private function linkAccount(User $user, array $remote): User
+    {
+        $isApplicant = $user->role?->name === config('services.nreims.default_role');
+
+        $user->forceFill([
+            'nreims_id'            => $remote['id'],
+            'email_verified_at'    => $user->email_verified_at ?? now(),
+            'must_change_password' => false,
+            'profile_completed_at' => $user->profile_completed_at ?? ($isApplicant ? null : now()),
+        ])->save();
+
+        Log::info('Portal account linked to NREIMS on first sign-in', ['user_id' => $user->id, 'nreims_id' => $remote['id']]);
+
+        $this->refreshAccount($user, $remote);
 
         return $user;
     }

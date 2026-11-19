@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Role;
+use App\Services\Auth\NreimsOAuth;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class UsersController extends Controller
 {
@@ -37,8 +39,9 @@ class UsersController extends Controller
 
         $users = $query->orderBy('name')->paginate(25)->withQueryString();
         $roles = Role::orderBy('display_name')->get();
+        $sso   = app(NreimsOAuth::class)->enabled();
 
-        return view('admin.users.index', compact('users', 'roles'));
+        return view('admin.users.index', compact('users', 'roles', 'sso'));
     }
 
     public function create()
@@ -46,17 +49,24 @@ class UsersController extends Controller
         $this->authorize('create', User::class);
 
         $roles = Role::orderBy('display_name')->get();
-        return view('admin.users.create', compact('roles'));
+        $sso   = app(NreimsOAuth::class)->enabled();
+
+        return view('admin.users.create', compact('roles', 'sso'));
     }
 
     public function store(Request $request)
     {
         $this->authorize('create', User::class);
 
+        // With NREIMS on, people sign in there: GMU adds them by email and the
+        // account links on their first NREIMS sign-in. A local password is only
+        // needed when NREIMS is off, or for a fallback administrator.
+        $sso = app(NreimsOAuth::class)->enabled();
+
         $data = $request->validate([
             'name'            => 'required|string|max:255',
             'email'           => 'required|email|unique:users,email',
-            'password'        => 'required|string|min:8|confirmed',
+            'password'        => [$sso ? 'nullable' : 'required', 'string', 'min:8', 'confirmed'],
             'role_id'         => 'nullable|exists:roles,id',
             'phone'           => 'nullable|string|max:20',
             'department'      => 'nullable|string|max:255',
@@ -64,15 +74,27 @@ class UsersController extends Controller
             'is_active'       => 'nullable|boolean',
         ]);
 
-        $data['password']  = Hash::make($data['password']);
+        $data['email']     = mb_strtolower(trim($data['email']));
         $data['is_active'] = $request->boolean('is_active', true);
-        // The Coordinator picked this password, so the user must replace it (H4).
-        $data['must_change_password'] = true;
 
-        User::create($data);
+        $localPassword = filled($data['password'] ?? null);
+
+        if ($localPassword) {
+            $data['password'] = Hash::make($data['password']);
+            // The Coordinator picked this password, so the user must replace it (H4).
+            $data['must_change_password'] = true;
+        } else {
+            // Nobody knows this password: the person signs in through NREIMS.
+            $data['password'] = Hash::make(Str::random(64));
+            $data['must_change_password'] = false;
+        }
+
+        $user = User::create($data);
 
         return redirect()->route('admin.users.index')
-            ->with('success', 'User account created successfully.');
+            ->with('success', $localPassword
+                ?'Account created. Hand over the password in person.'
+                : $user->name . ' is added. Their account links the first time they sign in with NREIMS using ' . $user->email . '.');
     }
 
     public function show(User $user)

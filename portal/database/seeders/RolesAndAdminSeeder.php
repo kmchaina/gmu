@@ -44,7 +44,10 @@ class RolesAndAdminSeeder extends Seeder
             return;
         }
 
-        $password  = env('GMU_ADMIN_PASSWORD');
+        // `GMU_ADMIN_PASSWORD=` left empty (as in .env.example) reads as "", which
+        // used to become the password itself and lock everyone out. Empty means
+        // "not set": generate one.
+        $password  = filled(env('GMU_ADMIN_PASSWORD')) ? (string) env('GMU_ADMIN_PASSWORD') : null;
         $generated = $password === null;
         $password ??= Str::password(20, symbols: false);
 

@@ -54,6 +54,7 @@ class NreimsLoginTest extends TestCase
         return $overrides + [
             'id' => 4812, 'first_name' => 'Neema', 'middle_name' => 'A.', 'last_name' => 'Mushi',
             'email' => 'Neema.Mushi@nimr.or.tz', 'phone' => '+255712000111',
+            'email_verified_at' => '2026-01-10T08:00:00.000000Z',
         ];
     }
 
@@ -136,17 +137,96 @@ class NreimsLoginTest extends TestCase
         $this->assertNotNull($user->last_login_at);
     }
 
-    public function test_an_email_alone_never_takes_over_an_existing_account(): void
+    public function test_an_unverified_nreims_email_is_refused(): void
     {
-        $coordinator = $this->user('coordinator', ['email' => 'neema.mushi@nimr.or.tz']);
+        $added = $this->user('research_scientist', ['email' => 'neema.mushi@nimr.or.tz']);
 
-        $this->get($this->nreimsReturns($this->neema()))
+        $this->get($this->nreimsReturns($this->neema(['email_verified_at' => null])))
             ->assertRedirect(route('login'))
             ->assertSessionHas('sso_error');
 
         $this->assertGuest();
-        $this->assertNull($coordinator->fresh()->nreims_id);
+        $this->assertNull($added->fresh()->nreims_id, 'An unverified email must not link an account.');
+        $this->assertSame(1, User::where('email', 'neema.mushi@nimr.or.tz')->count(), 'No second account is made.');
+    }
+
+    public function test_a_person_gmu_added_is_linked_on_their_first_verified_sign_in(): void
+    {
+        $added = $this->user('research_scientist', [
+            'email' => 'neema.mushi@nimr.or.tz', 'name' => 'Neema Mushi', 'must_change_password' => true,
+        ]);
+
+        $this->get($this->nreimsReturns($this->neema()))->assertRedirect(route('dashboard'));
+
+        $added->refresh();
+        $this->assertAuthenticatedAs($added);
+        $this->assertSame(4812, $added->nreims_id);
+        $this->assertSame('research_scientist', $added->role->name, 'The role GMU gave is kept.');
+        $this->assertFalse($added->must_change_password, 'They sign in with NREIMS now.');
+        $this->assertFalse($added->needsProfileCompletion(), 'Staff and reviewers GMU added skip the applicant form.');
         $this->assertSame(1, User::where('email', 'neema.mushi@nimr.or.tz')->count());
+
+        // Next time they are matched on the NREIMS id.
+        auth()->logout();
+        $this->get($this->nreimsReturns($this->neema()))->assertRedirect(route('dashboard'));
+        $this->assertAuthenticatedAs($added->fresh());
+    }
+
+    public function test_an_applicant_gmu_added_still_completes_the_profile(): void
+    {
+        $this->user('pi', ['email' => 'neema.mushi@nimr.or.tz']);
+
+        $this->get($this->nreimsReturns($this->neema()))->assertRedirect(route('profile.complete'));
+    }
+
+    public function test_an_email_held_by_another_nreims_user_is_refused(): void
+    {
+        $other = $this->user('pi', ['email' => 'neema.mushi@nimr.or.tz']);
+        $other->forceFill(['nreims_id' => 9999])->save();
+
+        $this->get($this->nreimsReturns($this->neema()))->assertSessionHas('sso_error');
+
+        $this->assertGuest();
+        $this->assertSame(9999, $other->fresh()->nreims_id);
+    }
+
+    public function test_a_deactivated_account_gmu_added_cannot_be_linked(): void
+    {
+        $added = $this->user('research_scientist', ['email' => 'neema.mushi@nimr.or.tz', 'is_active' => false]);
+
+        $this->get($this->nreimsReturns($this->neema()))->assertSessionHas('sso_error');
+
+        $this->assertGuest();
+        $this->assertNull($added->fresh()->nreims_id);
+    }
+
+    public function test_gmu_adds_a_person_without_a_password_when_nreims_is_on(): void
+    {
+        $admin = $this->user('coordinator');
+        $role  = Role::firstOrCreate(['name' => 'research_scientist'], ['display_name' => 'Research Scientist']);
+
+        $this->actingAs($admin)->get(route('admin.users.create'))->assertOk()->assertSee('Add a person');
+
+        $this->actingAs($admin)->post(route('admin.users.store'), [
+            'name' => 'Dr Peter Mboya', 'email' => 'P.Mboya@nimr.or.tz', 'role_id' => $role->id, 'is_active' => 1,
+        ])->assertRedirect(route('admin.users.index'))->assertSessionHasNoErrors();
+
+        $person = User::where('email', 'p.mboya@nimr.or.tz')->firstOrFail();
+        $this->assertNull($person->nreims_id);
+        $this->assertFalse($person->must_change_password);
+
+        $this->actingAs($admin)->get(route('admin.users.index'))->assertSee('Not signed in yet');
+    }
+
+    public function test_a_password_is_still_required_when_nreims_is_off(): void
+    {
+        config(['services.nreims.client_id' => null]);
+        $admin = $this->user('coordinator');
+        $role  = Role::firstOrCreate(['name' => 'research_scientist'], ['display_name' => 'Research Scientist']);
+
+        $this->actingAs($admin)->post(route('admin.users.store'), [
+            'name' => 'Dr Peter Mboya', 'email' => 'p.mboya@nimr.or.tz', 'role_id' => $role->id,
+        ])->assertSessionHasErrors('password');
     }
 
     public function test_a_deactivated_account_cannot_sign_in(): void
