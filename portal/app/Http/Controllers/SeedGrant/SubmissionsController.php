@@ -76,7 +76,8 @@ class SubmissionsController extends Controller implements HasMiddleware
             'assignments.reviewer', 'rounds.reviews.assignment.reviewer', 'rounds.decider']);
 
         $stage = $application->stage();
-        $taken = $application->stageAssignments($stage)->whereNull('removed_at')->pluck('reviewer_id')->push($application->pi_id);
+        $taken = $application->stageAssignments($stage)->whereNull('removed_at')->pluck('reviewer_id')
+            ->merge($this->workflow->excludedReviewerIds($application));
 
         return view('seed.submissions-show', [
             'application' => $application,
@@ -94,13 +95,17 @@ class SubmissionsController extends Controller implements HasMiddleware
         $data = $request->validate([
             'checks'   => ['array'],
             'checks.*' => ['boolean'],
-            'result'   => ['required', Rule::in(['eligible', 'ineligible'])],
+            'result'   => ['required', Rule::in(['eligible', 'return', 'ineligible'])],
             'note'     => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $this->workflow->screen($application, $request->user(), $data['checks'] ?? [], $data['result'] === 'eligible', $data['note'] ?? null);
+        $this->workflow->screen($application, $request->user(), $data['checks'] ?? [], $data['result'], $data['note'] ?? null);
 
-        return back()->with('success', $data['result'] === 'eligible' ? 'Marked eligible. Assign reviewers next.' : 'Marked not eligible. The applicant has been told why.');
+        return back()->with('success', match ($data['result']) {
+            'eligible' => 'Marked eligible. Assign reviewers next.',
+            'return'   => 'Returned to the applicant for correction. They have been told what to fix.',
+            default    => 'Marked not eligible. The applicant has been told why.',
+        });
     }
 
     public function assign(Request $request, SeedApplication $application)

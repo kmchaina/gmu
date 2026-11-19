@@ -64,7 +64,10 @@ class SeedGrantWorkflowTest extends TestCase
             'title' => 'Nurse-led follow-up calls to improve retention in HIV care',
             'mentor_name' => 'Dr. Joseph Kweka', 'mentor_designation' => 'Chief Research Scientist',
             'mentor_centre' => 'Mwanza Centre', 'mentor_suitability' => 'Led three HIV retention studies.',
-            'declared_no_prior_large_grant' => '1',
+            'prior_grant' => 'no',
+            'co_investigators' => 'Dr Halima Said, district hospital.',
+            'choices' => ['innovation' => 'yes', 'ip' => 'no'],
+            'declarations' => array_keys(S::DECLARATIONS),
             'sections' => $sections,
             'budget' => [['item' => 'Research assistants', 'amount' => '3,600,000'], ['item' => 'Airtime', 'amount' => '1,200,000']],
         ], $overrides);
@@ -131,8 +134,8 @@ class SeedGrantWorkflowTest extends TestCase
         $application = SeedApplication::firstOrFail();
         $this->assertSame('SG-2627-001', $application->reference);
 
-        $this->actingAs($this->pi)->post(route('seed.applications.submit', $application), $this->conceptForm(['declared_no_prior_large_grant' => '0']))
-            ->assertSessionHasErrors('declared_no_prior_large_grant');
+        $this->actingAs($this->pi)->post(route('seed.applications.submit', $application), $this->conceptForm(['prior_grant' => 'yes']))
+            ->assertSessionHasErrors('prior_grant');
         $this->assertSame(S::DRAFT, $application->fresh()->status);
 
         $application = $this->applyAndSubmitConcept();
@@ -312,13 +315,132 @@ class SeedGrantWorkflowTest extends TestCase
     {
         $application = $this->applyAndSubmitConcept();
         $workflow = app(\App\Services\SeedGrant\Workflow::class);
-        $workflow->screen($application, $this->gmu, [], true, null);
+        $workflow->screen($application, $this->gmu, [], 'eligible', null);
 
         // The assignment object returned by the workflow, not a fresh copy from the database.
         $assignment = $workflow->assignReviewer($application->fresh(), $this->reviewerA, $this->gmu);
         $workflow->declareInterest($assignment, false, null);
 
         $this->assertTrue($assignment->fresh()->canReview());
+    }
+
+    // ── NIMR's Stage One form ──────────────────────────────────────────────
+
+    public function test_the_concept_note_follows_the_nimr_stage_one_form(): void
+    {
+        $this->actingAs($this->pi)->post(route('seed.apply'));
+        $application = SeedApplication::firstOrFail();
+
+        // The form's ten questions, in order, with its own word limits.
+        $this->assertSame(['problem', 'objectives', 'approach', 'methodology', 'outcomes', 'stakeholders', 'innovation', 'ip', 'feasibility', 'outputs', 'workplan'],
+            array_keys(S::CONCEPT_SECTIONS));
+        $this->assertSame([250, 150, 200, 300, 200, 150, 100, 100, 150, 150],
+            array_slice(array_column(S::CONCEPT_SECTIONS, 2), 0, 10));
+
+        $this->actingAs($this->pi)->get(route('seed.applications.edit', $application))->assertOk()
+            ->assertSee('A. Applicant and project information')->assertSee('Proposed co-investigators or collaborators')
+            ->assertSee('1. Research problem and justification')->assertSee('8. Intellectual property and commercialisation potential')
+            ->assertSee('E. Applicant declaration')->assertSee(S::DECLARATIONS['stage_two']);
+
+        // Every declaration, both tick-boxes, a short title and a description for "yes".
+        $form = $this->conceptForm([
+            'title' => trim(str_repeat('word ', 30)),
+            'choices' => ['innovation' => 'yes', 'ip' => null],
+            'sections' => ['innovation' => ''],
+        ]);
+        $form['declarations'] = ['accurate'];
+        $this->actingAs($this->pi)->post(route('seed.applications.submit', $application), $form)
+            ->assertSessionHasErrors(['title', 'declarations', 'choices.ip', 'concept.innovation']);
+        $this->assertSame(S::DRAFT, $application->fresh()->status);
+    }
+
+    public function test_answering_no_to_questions_seven_and_eight_needs_no_description(): void
+    {
+        $this->actingAs($this->pi)->post(route('seed.apply'));
+        $application = SeedApplication::firstOrFail();
+
+        $this->actingAs($this->pi)->post(route('seed.applications.submit', $application), $this->conceptForm([
+            'choices' => ['innovation' => 'no', 'ip' => 'not_sure'],
+            'sections' => ['innovation' => 'left over from an earlier draft', 'ip' => ''],
+        ]))->assertSessionHasNoErrors();
+
+        $application->refresh();
+        $this->assertSame(S::SUBMITTED, $application->status);
+        $this->assertSame('', $application->sectionText('concept', 'innovation'), 'Text under a "No" is dropped.');
+        $this->assertSame('not_sure', $application->choice('ip'));
+        $this->assertTrue($application->declared_no_prior_large_grant);
+
+        $this->actingAs($this->gmu)->get(route('seed.submissions.show', ['application' => $application, 'tab' => 'concept']))
+            ->assertOk()->assertSee('Not sure')->assertSee('Dr Halima Said, district hospital.');
+    }
+
+    // ── Email, screening returns and who may review ────────────────────────
+
+    public function test_seed_grant_notices_are_also_emailed_with_a_link(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+
+        $application = $this->applyAndSubmitConcept();
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\SeedGrantNotice::class,
+            fn ($mail) => $mail->hasTo($this->gmu->email) && str_contains($mail->actionUrl, '/seed-grant/submissions/' . $application->id));
+
+        $this->actingAs($this->gmu)->post(route('seed.submissions.screen', $application), ['result' => 'eligible']);
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\SeedGrantNotice::class,
+            fn ($mail) => $mail->hasTo($this->pi->email) && $mail->headline === 'Your concept note passed screening'
+                && str_contains($mail->actionUrl, '/seed-grant/applications/' . $application->id));
+    }
+
+    public function test_a_mail_failure_does_not_stop_the_step(): void
+    {
+        \Illuminate\Support\Facades\Mail::shouldReceive('to')->andThrow(new \RuntimeException('SMTP down'));
+
+        $application = $this->applyAndSubmitConcept();
+
+        $this->assertSame(S::SUBMITTED, $application->status);
+        $this->assertSame(1, $this->gmu->notifications()->where('type', 'seed_submitted')->count());
+    }
+
+    public function test_gmu_can_return_a_concept_note_for_correction(): void
+    {
+        $application = $this->applyAndSubmitConcept();
+
+        $this->actingAs($this->gmu)->post(route('seed.submissions.screen', $application), ['result' => 'return'])
+            ->assertSessionHasErrors('screening_note');
+        $this->actingAs($this->gmu)->post(route('seed.submissions.screen', $application), ['result' => 'return', 'note' => 'Your mentor must be NIMR staff.'])
+            ->assertSessionHasNoErrors();
+
+        $application->refresh();
+        $this->assertSame(S::DRAFT, $application->status);
+        $this->actingAs($this->pi)->get(route('seed.applications.edit', $application))->assertOk()
+            ->assertSee('GMU returned your concept note for correction')->assertSee('Your mentor must be NIMR staff.');
+
+        // A returned note may come back even after the deadline has passed.
+        $this->call->update(['concept_deadline' => now()->subDay()]);
+        $this->actingAs($this->pi)->post(route('seed.applications.submit', $application), $this->conceptForm())->assertSessionHasNoErrors();
+        $this->assertSame(S::SUBMITTED, $application->fresh()->status);
+        $this->assertSame(1, $this->gmu->notifications()->where('title', 'like', 'Corrected concept note%')->count());
+    }
+
+    public function test_applicants_in_the_call_and_the_approvers_cannot_review(): void
+    {
+        $application = $this->applyAndSubmitConcept();
+        $this->actingAs($this->gmu)->post(route('seed.submissions.screen', $application), ['result' => 'eligible']);
+
+        $rival = $this->user('pi', ['name' => 'Rival Applicant', 'employment_type' => 'contract', 'first_appointment_date' => now()->subYear()]);
+        $this->actingAs($rival)->post(route('seed.apply'))->assertRedirect();
+        $dg = User::whereHas('role', fn ($q) => $q->where('name', 'dg'))->first();
+        $dg->update(['name' => 'Prof Director Generalname']);   // a fixed, unmistakable name
+
+        foreach ([$rival, $dg] as $who) {
+            $this->actingAs($this->gmu)->post(route('seed.submissions.assign', $application), ['reviewer_id' => $who->id])
+                ->assertSessionHasErrors('reviewer_id');
+        }
+        $this->assertSame(0, SeedReviewerAssignment::count());
+
+        // The refusal names them once (the flashed error); after that the picker never lists them.
+        $this->actingAs($this->gmu)->get(route('seed.submissions.show', $application))->assertOk();
+        $this->actingAs($this->gmu)->get(route('seed.submissions.show', $application))->assertOk()
+            ->assertSee($this->reviewerA->name)->assertDontSee('Rival Applicant')->assertDontSee('Prof Director Generalname');
     }
 
     public function test_each_role_lands_on_its_own_dashboard(): void

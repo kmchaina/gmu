@@ -8,12 +8,16 @@ use App\Models\Seed\SeedCall;
 use App\Models\Seed\SeedReview;
 use App\Models\Seed\SeedReviewerAssignment;
 use App\Models\Seed\SeedReviewRound;
+use App\Mail\SeedGrantNotice;
 use App\Models\User;
 use App\Services\Notifier;
 use App\Support\SeedGrant;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 /**
  * Every change of state in a seed grant application goes through here: the
@@ -94,7 +98,9 @@ class Workflow
         $this->assertStatus($application, [SeedGrant::DRAFT]);
         $this->assertEligible($application->pi);
 
-        if (! $application->call->acceptingConceptNotes()) {
+        // A concept note GMU returned for correction may come back after the deadline.
+        $returned = $this->wasReturned($application);
+        if (! $application->call->acceptingConceptNotes() && ! $returned) {
             $this->fail('call', 'The concept note deadline has passed.');
         }
 
@@ -104,8 +110,8 @@ class Workflow
         $application->concept_submitted_at = now();
         $application->save();
 
-        $this->notifier->send($this->gmu(), 'seed_submitted', 'Concept note to screen: ' . $application->reference,
-            $application->pi->name . ' submitted “' . $application->title . '”. It is waiting for GMU screening.', $application);
+        $this->tell($this->gmu(), 'seed_submitted', ($returned ? 'Corrected concept note to screen: ' : 'Concept note to screen: ') . $application->reference,
+            $application->pi->name . ($returned ? ' corrected and resubmitted “' : ' submitted “') . $application->title . '”. It is waiting for GMU screening.', $application);
     }
 
     public function submitProposal(SeedApplication $application): void
@@ -122,7 +128,7 @@ class Workflow
         $application->proposal_submitted_at = now();
         $application->save();
 
-        $this->notifier->send($this->gmu(), 'seed_submitted', 'Full proposal received: ' . $application->reference,
+        $this->tell($this->gmu(), 'seed_submitted', 'Full proposal received: ' . $application->reference,
             $application->pi->name . ' submitted the full proposal. Assign reviewers to start the scored review.', $application);
     }
 
@@ -153,9 +159,9 @@ class Workflow
             $application->save();
             $application->unsetRelation('rounds');
 
-            $this->notifier->send($this->reviewers($application, $stage), 'seed_review', 'Revised ' . $stage . ' to review: ' . $application->reference,
+            $this->tell($this->reviewers($application, $stage), 'seed_review', 'Revised ' . $stage . ' to review: ' . $application->reference,
                 'The applicant has responded to round ' . $round->number . '. Please review round ' . $next->number . ' by ' . $next->due_at->format('j M Y') . '.', $application);
-            $this->notifier->send($this->gmu(), 'seed_resubmitted', 'Revision received: ' . $application->reference,
+            $this->tell($this->gmu(), 'seed_resubmitted', 'Revision received: ' . $application->reference,
                 'Round ' . $next->number . ' is open with the same reviewers.', $application);
 
             return $next;
@@ -169,26 +175,49 @@ class Workflow
      *
      * @param  array<string,bool>  $checks
      */
-    public function screen(SeedApplication $application, User $by, array $checks, bool $eligible, ?string $note): void
+    /**
+     * @param  string  $result  eligible (on to reviewers), return (back to the
+     *                          applicant to correct and resubmit) or ineligible (closed)
+     */
+    public function screen(SeedApplication $application, User $by, array $checks, string $result, ?string $note): void
     {
         $this->assertStatus($application, [SeedGrant::SUBMITTED]);
 
-        if (! $eligible && blank($note)) {
-            $this->fail('screening_note', 'Give the applicant the reason it is not eligible.');
+        if (! in_array($result, ['eligible', 'return', 'ineligible'], true)) {
+            $this->fail('result', 'Choose eligible, return for correction, or not eligible.');
+        }
+        if ($result !== 'eligible' && blank($note)) {
+            $this->fail('screening_note', $result === 'return'
+                ? 'Tell the applicant what to correct.'
+                : 'Give the applicant the reason it is not eligible.');
         }
 
         $application->screening_checks = $checks;
         $application->screening_note = $note;
         $application->screened_by = $by->id;
         $application->screened_at = now();
-        $application->status = $eligible ? SeedGrant::SCREENED : SeedGrant::INELIGIBLE;
+        $application->status = match ($result) {
+            'eligible'   => SeedGrant::SCREENED,
+            'return'     => SeedGrant::DRAFT,
+            'ineligible' => SeedGrant::INELIGIBLE,
+        };
         $application->save();
 
-        $this->notifier->send($application->pi, 'seed_screened',
-            $eligible ? 'Your concept note passed screening' : 'Your concept note is not eligible',
-            $eligible ? 'GMU found ' . $application->reference . ' eligible and complete. It now goes to reviewers.'
-                      : 'GMU found ' . $application->reference . ' not eligible: ' . $note,
-            $application);
+        [$title, $message] = match ($result) {
+            'eligible'   => ['Your concept note passed screening',
+                             'GMU found ' . $application->reference . ' eligible and complete. It now goes to reviewers.'],
+            'return'     => ['Your concept note needs a correction',
+                             'GMU returned ' . $application->reference . ' for you to correct and submit again: ' . $note],
+            'ineligible' => ['Your concept note is not eligible',
+                             'GMU found ' . $application->reference . ' not eligible: ' . $note],
+        };
+        $this->tell($application->pi, 'seed_screened', $title, $message, $application);
+    }
+
+    /** GMU sent this concept note back for correction and it has not been resubmitted yet. */
+    public function wasReturned(SeedApplication $application): bool
+    {
+        return $application->status === SeedGrant::DRAFT && $application->screened_at !== null;
     }
 
     public function assignReviewer(SeedApplication $application, User $reviewer, User $by): SeedReviewerAssignment
@@ -200,6 +229,9 @@ class Workflow
 
         if ($reviewer->id === $application->pi_id) {
             $this->fail('reviewer_id', 'An applicant cannot review their own application.');
+        }
+        if ($why = $this->reviewerExclusion($reviewer, $application)) {
+            $this->fail('reviewer_id', $reviewer->name . ' cannot review: ' . $why);
         }
         if (! $reviewer->is_active) {
             $this->fail('reviewer_id', 'That account is deactivated.');
@@ -225,10 +257,35 @@ class Workflow
         }
         $application->unsetRelation('assignments');
 
-        $this->notifier->send($reviewer, 'seed_review', 'Review request: ' . $application->reference,
+        $this->tell($reviewer, 'seed_review', 'Review request: ' . $application->reference,
             'GMU has asked you to review a seed grant ' . $stage . '. First declare whether you have any conflict of interest.', $application);
 
         return $assignment;
+    }
+
+    /**
+     * Who may never review in this call, whatever they declare: anyone leading
+     * an application in the same call (they would be judging a competitor),
+     * and the DRCP and DG, who decide on the recommendations afterwards.
+     */
+    public function reviewerExclusion(User $user, SeedApplication $application): ?string
+    {
+        if ($user->hasAnyRole(['drcp', 'dg'])) {
+            return 'the DRCP and the Director General approve the results, so they do not review.';
+        }
+        if (SeedApplication::where('seed_call_id', $application->seed_call_id)->where('pi_id', $user->id)->exists()) {
+            return 'they have their own application in this call.';
+        }
+
+        return null;
+    }
+
+    /** Ids of everyone reviewerExclusion() rules out for this call. */
+    public function excludedReviewerIds(SeedApplication $application)
+    {
+        return SeedApplication::where('seed_call_id', $application->seed_call_id)->pluck('pi_id')
+            ->merge(User::whereHas('role', fn ($q) => $q->whereIn('name', ['drcp', 'dg']))->pluck('id'))
+            ->unique()->values();
     }
 
     public function removeReviewer(SeedReviewerAssignment $assignment): void
@@ -258,7 +315,7 @@ class Workflow
             $application->save();
             $application->unsetRelation('rounds');
 
-            $this->notifier->send($this->reviewers($application, $stage), 'seed_review', 'Review open: ' . $application->reference,
+            $this->tell($this->reviewers($application, $stage), 'seed_review', 'Review open: ' . $application->reference,
                 'Round 1 is open. Please submit your review by ' . $due->format('j M Y') . '.', $application);
 
             return $round;
@@ -327,7 +384,7 @@ class Workflow
                 'Decision on ' . $application->reference,
                 'Your ' . $stage . ' was not taken forward.' . ($note ? ' ' . $note : '')],
         };
-        $this->notifier->send($application->pi, 'seed_decision', $title, $message, $application);
+        $this->tell($application->pi, 'seed_decision', $title, $message, $application);
     }
 
     // ── Reviewers ───────────────────────────────────────────────────────────
@@ -344,7 +401,7 @@ class Workflow
         $assignment->update(['coi_status' => $conflict ? 'conflict' : 'none', 'coi_note' => $note, 'coi_declared_at' => now()]);
 
         if ($conflict) {
-            $this->notifier->send($this->gmu(), 'seed_conflict', 'Conflict declared on ' . $assignment->application->reference,
+            $this->tell($this->gmu(), 'seed_conflict', 'Conflict declared on ' . $assignment->application->reference,
                 $assignment->reviewer->name . ' declared a conflict of interest and will not review it. Assign another reviewer.', $assignment->application);
         }
     }
@@ -408,7 +465,7 @@ class Workflow
         $review->save();
 
         if ($submit && $this->roundComplete($round)) {
-            $this->notifier->send($this->gmu(), 'seed_reviews_in', 'Reviews complete: ' . $application->reference,
+            $this->tell($this->gmu(), 'seed_reviews_in', 'Reviews complete: ' . $application->reference,
                 'All reviewers have submitted round ' . $round->number . '. It is ready for your decision.', $application);
         }
 
@@ -446,7 +503,7 @@ class Workflow
         if ($decision === 'returned') {
             $application->status = SeedGrant::RECOMMENDED;
             $application->save();
-            $this->notifier->send($this->gmu(), 'seed_returned', SeedApproval::LEVELS[$level] . ' returned ' . $application->reference, (string) $note, $application);
+            $this->tell($this->gmu(), 'seed_returned', SeedApproval::LEVELS[$level] . ' returned ' . $application->reference, (string) $note, $application);
 
             return;
         }
@@ -464,11 +521,11 @@ class Workflow
         $application->save();
 
         match ($level) {
-            'gmu'  => $this->notifier->send($this->usersWithRole('drcp'), 'seed_approval', 'For DRCP clearance: ' . $application->reference,
+            'gmu'  => $this->tell($this->usersWithRole('drcp'), 'seed_approval', 'For DRCP clearance: ' . $application->reference,
                         'GMU has sent a recommended seed grant for your clearance.', $application),
-            'drcp' => $this->notifier->send($this->usersWithRole('dg'), 'seed_approval', 'For your approval: ' . $application->reference,
+            'drcp' => $this->tell($this->usersWithRole('dg'), 'seed_approval', 'For your approval: ' . $application->reference,
                         'Cleared by DRCP. Awaiting the Director General’s decision.', $application),
-            'dg'   => $this->notifier->send(collect([$application->pi])->merge($this->gmu()), 'seed_approved', 'Approved: ' . $application->reference,
+            'dg'   => $this->tell(collect([$application->pi])->merge($this->gmu()), 'seed_approved', 'Approved: ' . $application->reference,
                         'The Director General approved the seed grant. GMU will issue the grant agreement.', $application),
         };
     }
@@ -483,7 +540,7 @@ class Workflow
         $application->agreement_issued_at = now();
         $application->save();
 
-        $this->notifier->send($application->pi, 'seed_agreement', 'Your grant agreement is ready',
+        $this->tell($application->pi, 'seed_agreement', 'Your grant agreement is ready',
             'Read and accept the agreement for ' . $application->reference . ' online.', $application);
     }
 
@@ -495,7 +552,7 @@ class Workflow
         $application->agreement_accepted_at = now();
         $application->save();
 
-        $this->notifier->send($this->gmu(), 'seed_agreement', 'Agreement accepted: ' . $application->reference,
+        $this->tell($this->gmu(), 'seed_agreement', 'Agreement accepted: ' . $application->reference,
             $application->pi->name . ' accepted the grant agreement. Collect the signatures and upload the signed copy.', $application);
     }
 
@@ -509,7 +566,7 @@ class Workflow
         $application->status = SeedGrant::AWARDED;
         $application->save();
 
-        $this->notifier->send($application->pi, 'seed_agreement', 'Signed agreement on file: ' . $application->reference,
+        $this->tell($application->pi, 'seed_agreement', 'Signed agreement on file: ' . $application->reference,
             'The fully signed grant agreement is now in the portal.', $application);
     }
 
@@ -539,22 +596,46 @@ class Workflow
         $problems = [];
 
         if ($stage === 'concept') {
-            if (blank($application->title)) {
+            // Section A of NIMR's concept note form.
+            $titleWords = SeedGrant::wordCount($application->title);
+            if ($titleWords === 0) {
                 $problems['title'] = 'Give the project a title.';
+            } elseif ($titleWords > SeedGrant::TITLE_MAX_WORDS) {
+                $problems['title'] = "The title is {$titleWords} words; the limit is " . SeedGrant::TITLE_MAX_WORDS . '.';
             }
-            foreach (['mentor_name' => 'name', 'mentor_designation' => 'designation', 'mentor_centre' => 'centre or section', 'mentor_suitability' => 'suitability'] as $field => $label) {
+
+            $prior = $application->priorLargeGrant();
+            if ($prior === null) {
+                $problems['prior_grant'] = 'Say whether you have held a research grant above USD 10,000 as Principal Investigator.';
+            } elseif ($prior === 'yes') {
+                $problems['prior_grant'] = 'Lead applicants must not have held a research grant above USD 10,000 as Principal Investigator, so this call is not open to you.';
+            }
+
+            foreach (['mentor_name' => 'name', 'mentor_designation' => 'designation', 'mentor_centre' => 'NIMR centre or section', 'mentor_suitability' => 'relevant expertise'] as $field => $label) {
                 if (blank($application->{$field})) {
                     $problems[$field] = 'Give your mentor’s ' . $label . '.';
                 }
             }
-            if (! $application->declared_no_prior_large_grant) {
-                $problems['declared_no_prior_large_grant'] = 'Confirm you have not held a research grant above USD 10,000 as PI.';
+            $this->checkWords($problems, 'mentor_suitability', 'The mentor’s expertise', $application->mentor_suitability, SeedGrant::MENTOR_EXPERTISE_WORDS);
+            $this->checkWords($problems, 'co_investigators', 'Co-investigators', $application->conceptField('co_investigators'), SeedGrant::CO_INVESTIGATORS_WORDS);
+
+            // Questions 7 and 8 start with a tick-box.
+            foreach (SeedGrant::CONCEPT_CHOICES as $key => $choice) {
+                if ($application->choice($key) === null) {
+                    $problems["choices.{$key}"] = SeedGrant::CONCEPT_SECTIONS[$key][0] . ': answer the question.';
+                }
+            }
+
+            // Section E: every declaration.
+            if (count($application->declarations()) < count(SeedGrant::DECLARATIONS)) {
+                $problems['declarations'] = 'Tick every statement in the applicant declaration.';
             }
         }
 
         foreach (SeedGrant::sections($stage) as $key => [$heading, , $limit]) {
             $words = SeedGrant::wordCount($application->sectionText($stage, $key));
-            if ($words === 0) {
+            $required = $stage !== 'concept' || SeedGrant::sectionRequired($key, $application->choice($key));
+            if ($words === 0 && $required) {
                 $problems["{$stage}.{$key}"] = $heading . ': this section is empty.';
             } elseif ($words > $limit) {
                 $problems["{$stage}.{$key}"] = $heading . ": {$words} words, over the {$limit}-word limit.";
@@ -585,6 +666,14 @@ class Workflow
         }
 
         return $problems;
+    }
+
+    private function checkWords(array &$problems, string $field, string $label, ?string $text, int $limit): void
+    {
+        $words = SeedGrant::wordCount($text);
+        if ($words > $limit) {
+            $problems[$field] = "{$label}: {$words} words, over the {$limit}-word limit.";
+        }
     }
 
     private function assertEligible(User $pi): void
@@ -619,6 +708,40 @@ class Workflow
     }
 
     // ── Who is told ─────────────────────────────────────────────────────────
+
+    /**
+     * Tell people in the portal and by email. A mail failure is logged and
+     * never undoes the step: the portal notification is the record.
+     */
+    private function tell(mixed $recipients, string $type, string $title, string $message, SeedApplication $application): void
+    {
+        $this->notifier->send($recipients, $type, $title, $message, $application);
+
+        foreach ($recipients instanceof User ? [$recipients] : $recipients as $user) {
+            if (! $user instanceof User || ! $user->is_active || blank($user->email)) {
+                continue;
+            }
+
+            try {
+                Mail::to($user->email)->send(new SeedGrantNotice($user->name, $title, $message, $this->linkFor($user, $application), $application->reference));
+            } catch (Throwable $e) {
+                Log::warning('Seed grant email not sent', ['type' => $type, 'user_id' => $user->id, 'reason' => $e->getMessage()]);
+            }
+        }
+    }
+
+    /** The page this person acts on for this application. */
+    private function linkFor(User $user, SeedApplication $application): string
+    {
+        return match (true) {
+            $user->id === $application->pi_id            => route('seed.applications.show', $application),
+            $user->can('manage-seed-grants')             => route('seed.submissions.show', $application),
+            $user->can('approve-seed-grants')            => route('seed.approvals.show', $application),
+            $application->assignments()->where('reviewer_id', $user->id)->whereNull('removed_at')->exists()
+                                                         => route('seed.reviews.index'),
+            default                                      => route('dashboard'),
+        };
+    }
 
     /** GMU staff who run the call. */
     public function gmu()

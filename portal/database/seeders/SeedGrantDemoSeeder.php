@@ -65,7 +65,7 @@ class SeedGrantDemoSeeder extends Seeder
                 continue;
             }
 
-            $workflow->screen($application->fresh(), $gmu, ['staff' => true, 'service' => true], true, null);
+            $workflow->screen($application->fresh(), $gmu, ['staff' => true, 'service' => true], 'eligible', null);
             foreach ($reviewers as $r) {
                 $a = $workflow->assignReviewer($application->fresh(), $r, $gmu);
                 $workflow->declareInterest($a, false, null);
@@ -135,6 +135,13 @@ class SeedGrantDemoSeeder extends Seeder
         foreach (SeedGrant::CONCEPT_SECTIONS as $key => [, , $limit]) {
             $concept[$key] = $this->text((int) ($limit * 0.6), $topic);
         }
+        // Section A extras, questions 7 and 8, and the Section E declaration.
+        $concept['innovation_answer'] = 'yes';
+        $concept['ip_answer'] = 'no';
+        $concept['ip'] = '';
+        $concept['prior_grant'] = 'no';
+        $concept['co_investigators'] = 'Dr Halima Said, Medical Officer, district hospital; Mr Ally Juma, Data Manager, NIMR.';
+        $concept['declarations'] = array_keys(SeedGrant::DECLARATIONS);
         $application->fill([
             'title' => $title, 'concept' => $concept, 'declared_no_prior_large_grant' => true,
             'mentor_name' => 'Dr Joseph Kweka', 'mentor_designation' => 'Chief Research Scientist',

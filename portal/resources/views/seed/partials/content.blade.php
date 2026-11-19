@@ -2,29 +2,49 @@
 @php use App\Support\SeedGrant; @endphp
 
 @if($stage === 'concept')
+    @php
+        $prior = $application->priorLargeGrant();
+        $coInv = $application->conceptField('co_investigators');
+    @endphp
     <section class="card">
         <div class="card-body">
+            <div class="card-title" style="margin-bottom:12px;">A. Applicant and project information</div>
             <div class="form-grid">
                 <div class="kv"><span class="k">Project title</span><span class="v">{{ $application->title ?: '—' }}</span></div>
                 <div class="kv"><span class="k">Proposed mentor</span><span class="v">{{ $application->mentor_name ?: '—' }}</span>
                     <span class="small muted">{{ collect([$application->mentor_designation, $application->mentor_centre])->filter()->implode(' · ') }}</span></div>
+                <div class="kv"><span class="k">Prior grant above USD 10,000 as PI</span>
+                    <span class="v">{{ ['no' => 'No', 'yes' => 'Yes'][$prior] ?? 'Not answered' }}</span>
+                    @if($prior === 'yes' && $application->conceptField('prior_grant_details'))<span class="small muted">{{ $application->conceptField('prior_grant_details') }}</span>@endif</div>
+                <div class="kv"><span class="k">Total funding requested</span><span class="v mono">{{ SeedGrant::tzs($application->budgetTotal('concept')) }}</span></div>
             </div>
             @if($application->mentor_suitability)
-                <div class="kv" style="margin-top:16px;"><span class="k">Why this mentor</span><p class="doc-text" style="font-size:14px;">{{ $application->mentor_suitability }}</p></div>
+                <div class="kv" style="margin-top:16px;"><span class="k">Mentor’s relevant expertise</span><p class="doc-text" style="font-size:14px;">{{ $application->mentor_suitability }}</p></div>
             @endif
+            <div class="kv" style="margin-top:16px;"><span class="k">Co-investigators or collaborators</span>
+                <p class="doc-text" style="font-size:14px;">{{ filled($coInv) ? $coInv : 'None named.' }}</p></div>
         </div>
     </section>
 @endif
 
 <section class="card">
     <div class="card-body">
+        @if($stage === 'concept')<div class="card-title" style="margin-bottom:4px;">B. Technical questions and C. workplan</div>@endif
         @foreach(SeedGrant::sections($stage) as $key => [$heading])
+            @php
+                $text = $application->sectionText($stage, $key);
+                $choice = $stage === 'concept' ? (SeedGrant::CONCEPT_CHOICES[$key] ?? null) : null;
+                $answer = $choice ? $application->choice($key) : null;
+            @endphp
             <div class="prose-section" id="{{ $stage }}-{{ $key }}">
                 <h3>{{ $heading }}</h3>
-                @php $text = $application->sectionText($stage, $key); @endphp
+                @if($choice)
+                    <p class="small" style="margin-top:6px;">{{ $choice['question'] }}
+                        <strong>{{ $choice['options'][$answer] ?? 'Not answered' }}</strong></p>
+                @endif
                 @if($text !== '')
                     <p class="doc-text" style="margin-top:8px;">{{ $text }}</p>
-                @else
+                @elseif(! $choice || SeedGrant::sectionRequired($key, $answer))
                     <p class="muted" style="margin-top:8px;">Not written yet.</p>
                 @endif
             </div>
@@ -63,6 +83,26 @@
         </table>
     </div>
 </section>
+
+@if($stage === 'concept')
+    @php $ticked = $application->declarations(); @endphp
+    <section class="card">
+        <div class="card-body">
+            <div class="card-title">E. Applicant declaration</div>
+            <ul style="margin:10px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:6px; font-size:14px;">
+                @foreach(SeedGrant::DECLARATIONS as $value => $statement)
+                    <li class="row" style="gap:8px; align-items:flex-start; flex-wrap:nowrap;">
+                        <i class="fas {{ in_array($value, $ticked, true) ? 'fa-check-square' : 'fa-square' }}" style="margin-top:3px; color:{{ in_array($value, $ticked, true) ? 'var(--blue-600)' : 'var(--muted-3)' }};" aria-hidden="true"></i>
+                        <span>{{ $statement }}</span>
+                    </li>
+                @endforeach
+            </ul>
+            @if($application->concept_submitted_at)
+                <p class="small muted" style="margin-top:10px;">Submitted by {{ $application->pi->name }} on {{ $application->concept_submitted_at->format('j M Y') }}.</p>
+            @endif
+        </div>
+    </section>
+@endif
 
 @if($stage === 'proposal')
     <section class="card">

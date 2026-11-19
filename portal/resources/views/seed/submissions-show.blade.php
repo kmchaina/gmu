@@ -54,7 +54,7 @@
                         <div class="list-row"><span class="list-main"><span class="list-title">Concept note submitted</span></span><span class="small muted">{{ $application->concept_submitted_at->format('j M Y H:i') }}</span></div>
                     @endif
                     @if($application->screened_at)
-                        <div class="list-row"><span class="list-main"><span class="list-title">Screened: {{ $s === S::INELIGIBLE ? 'not eligible' : 'eligible' }}</span>
+                        <div class="list-row"><span class="list-main"><span class="list-title">Screened: {{ $s === S::INELIGIBLE ? 'not eligible' : ($s === S::DRAFT || $s === S::SUBMITTED ? 'returned for correction' : 'eligible') }}</span>
                             <span class="list-sub">{{ $application->screener?->name }}{{ $application->screening_note ? ' — ' . $application->screening_note : '' }}</span></span><span class="small muted">{{ $application->screened_at->format('j M Y H:i') }}</span></div>
                     @endif
                     @foreach($application->rounds as $r)
@@ -153,7 +153,7 @@
                             'prior'      => ['No prior grant over USD 10,000 as PI', $application->declared_no_prior_large_grant, 'declared'],
                             'complete'   => ['All sections complete, within limits', empty($complete), $application->pageEstimate('concept') . ' pp'],
                             'budget'     => ['Budget within ' . number_format($application->call->min_amount / 1e6) . 'M–' . number_format($application->call->max_amount / 1e6) . 'M', ! isset($complete['budget']), number_format($application->budgetTotal('concept') / 1e6, 2) . 'M'],
-                            'mentor'     => ['Mentor named, with suitability', filled($application->mentor_name) && filled($application->mentor_suitability), $application->mentor_name ?: '—'],
+                            'mentor'     => ['Mentor named, with relevant expertise', filled($application->mentor_name) && filled($application->mentor_suitability), $application->mentor_name ?: '—'],
                         ];
                     @endphp
                     <div style="margin-top:12px;">
@@ -171,10 +171,11 @@
                     <fieldset style="border:0; padding:0; margin:16px 0 0; display:flex; flex-direction:column; gap:8px;">
                         <legend class="label" style="margin-bottom:6px;">Result</legend>
                         <label class="opt"><input type="radio" name="result" value="eligible" @checked(empty($eligibility) && empty($complete))><span><strong>Eligible</strong><span class="opt-sub">Goes on to reviewers</span></span></label>
-                        <label class="opt"><input type="radio" name="result" value="ineligible" @checked(! empty($eligibility) || ! empty($complete))><span><strong>Not eligible</strong><span class="opt-sub">The applicant is told why</span></span></label>
+                        <label class="opt"><input type="radio" name="result" value="return" @checked(empty($eligibility) && ! empty($complete))><span><strong>Return for correction</strong><span class="opt-sub">Back to the applicant to fix and resubmit</span></span></label>
+                        <label class="opt"><input type="radio" name="result" value="ineligible" @checked(! empty($eligibility))><span><strong>Not eligible</strong><span class="opt-sub">Closed; the applicant is told why</span></span></label>
                     </fieldset>
                     <x-ui.field label="Note to the applicant" name="screening_note">
-                        <textarea name="note" class="textarea" rows="3" style="margin-top:12px;" placeholder="Required if not eligible">{{ old('note') }}</textarea>
+                        <textarea name="note" class="textarea" rows="3" style="margin-top:12px;" placeholder="Required if returned or not eligible">{{ old('note') }}</textarea>
                     </x-ui.field>
                     <button class="btn btn-primary btn-block" style="margin-top:14px;" type="submit">Record screening</button>
                 </div>
@@ -220,7 +221,7 @@
                         </select>
                         <button class="btn" type="submit">Add</button>
                     </form>
-                    <p class="tiny muted" style="margin-top:10px;">Reviewers are anonymous to the applicant and declare conflicts before they can see the application.</p>
+                    <p class="tiny muted" style="margin-top:10px;">Reviewers are anonymous to the applicant and declare conflicts before they can see the application. Applicants in this call, the DRCP and the DG are not listed.</p>
                 </div>
             </section>
         @endif

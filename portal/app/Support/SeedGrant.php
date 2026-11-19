@@ -13,6 +13,7 @@ final class SeedGrant
 
     public const DRAFT              = 'draft';
     public const SUBMITTED          = 'submitted';          // concept note awaiting GMU screening
+    // GMU can also return a submitted concept note for correction: it goes back to DRAFT with a screening note.
     public const SCREENED           = 'screened';           // eligible, awaiting reviewers
     public const INELIGIBLE         = 'ineligible';
     public const CONCEPT_REVIEW     = 'concept_review';
@@ -85,15 +86,66 @@ final class SeedGrant
 
     // ── What each stage asks for ────────────────────────────────────────────
 
-    /** Concept note sections: key => [heading, guidance, word limit]. About five pages in all. */
+    /**
+     * NIMR's "Stage One Concept Note Application Form", Section B (the ten
+     * technical questions) and Section C (the preliminary workplan), with the
+     * form's own word limits: key => [heading, question, word limit].
+     *
+     * Section C gives no limit; 250 words is ours.
+     */
     public const CONCEPT_SECTIONS = [
-        'problem'    => ['Problem and implementation gap', 'The implementation problem, brief evidence of the gap, the setting and the intended beneficiaries.', 450],
-        'aims'       => ['Aim, objectives and research questions', 'The overall aim, specific objectives and the focused implementation research question(s).', 300],
-        'methods'    => ['Framework, design and methods', 'Implementation science framework or rationale, study design, setting, participants or data sources, and key methods.', 550],
-        'strategies' => ['Implementation strategies and outcomes', 'Strategies you will test and the outcomes you will measure (acceptability, adoption, appropriateness, feasibility, fidelity, reach, cost or sustainability, as relevant).', 350],
-        'outputs'    => ['Outputs and use of findings', 'Expected outputs, who will use the findings and a practical dissemination and use plan.', 250],
-        'workplan'   => ['Workplan and milestones', 'Key activities and milestones across the 12 months.', 250],
+        'problem'      => ['1. Research problem and justification', 'What specific implementation or health service delivery problem will the study address? Describe the local context, supporting evidence, implementation gap, study setting, intended beneficiaries and significance of the proposed research.', 250],
+        'objectives'   => ['2. Research objectives and questions', 'State the overall research aim, up to three specific, measurable and achievable objectives, and the corresponding implementation research question(s).', 150],
+        'approach'     => ['3. Proposed implementation approach', 'What intervention, implementation strategy or service delivery approach will be investigated or improved? Explain how the proposed approach will address the identified implementation gap.', 200],
+        'methodology'  => ['4. Research methodology', 'Describe the study design, setting, target population or data sources, sampling approach, data collection methods and proposed analysis. Indicate the implementation science framework or rationale guiding the study, where applicable.', 300],
+        'outcomes'     => ['5. Expected implementation outcomes and practical application', 'Which implementation outcomes will the study assess, and how will they be measured? Consider acceptability, adoption, appropriateness, feasibility, fidelity, reach, cost or sustainability, as relevant. Explain how the findings may contribute to improving health services, programme implementation or policy.', 200],
+        'stakeholders' => ['6. Stakeholder engagement', 'Which healthcare facilities, communities, programme managers, policymakers or other stakeholders will be involved? Describe their anticipated roles in the research and how their engagement will support the application of findings.', 150],
+        'innovation'   => ['7. Innovation potential', 'If yes, briefly describe its innovation potential and practical value.', 100],
+        'ip'           => ['8. Intellectual property and commercialisation potential', 'If yes, briefly describe the anticipated pathway.', 100],
+        'feasibility'  => ['9. Feasibility and implementation risks', 'What are the main anticipated challenges to completing the study within 12 months, and how will they be addressed? Briefly explain how the proposed activities can be implemented within the available resources.', 150],
+        'outputs'      => ['10. Expected research outputs and dissemination', 'List up to three expected research outputs. Identify the intended users of the findings and briefly explain how the results will be disseminated and used to inform health service delivery, programme implementation or policy.', 150],
+        'workplan'     => ['C. Preliminary implementation workplan', 'Describe the possibility of implementing the project in a period not exceeding 12 months: the key activities and milestones.', 250],
     ];
+
+    /**
+     * Questions 7 and 8 open with a tick-box; the description is required
+     * only for the answers listed in `describe`. Stored in the concept JSON
+     * under "<key>_answer".
+     */
+    public const CONCEPT_CHOICES = [
+        'innovation' => [
+            'question' => 'Does the proposed research involve an innovative product, technology, implementation approach or service delivery solution?',
+            'options'  => ['yes' => 'Yes', 'no' => 'No'],
+            'describe' => ['yes'],
+        ],
+        'ip' => [
+            'question' => 'Does the proposed research have potential for intellectual property protection, technology transfer or commercialisation?',
+            'options'  => ['yes' => 'Yes', 'no' => 'No', 'not_sure' => 'Not sure'],
+            'describe' => ['yes'],
+        ],
+    ];
+
+    /** Word limits on Section A fields, from the form. */
+    public const TITLE_MAX_WORDS = 25;
+    public const MENTOR_EXPERTISE_WORDS = 50;
+    public const CO_INVESTIGATORS_WORDS = 100;
+    public const PRIOR_GRANT_WORDS = 50;
+
+    /** Section E, the applicant declaration: every box must be ticked. Stored in the concept JSON under "declarations". */
+    public const DECLARATIONS = [
+        'accurate'   => 'I confirm that the information provided in this application is accurate and complete.',
+        'eligible'   => 'I confirm that I meet the eligibility requirements for this seed grant call.',
+        'disclosed'  => 'I have disclosed relevant previous research funding and any potential conflicts of interest.',
+        'stage_two'  => 'I understand that shortlisted applicants will be required to submit a full proposal, detailed budget and signed scientific mentor commitment letter during Stage Two.',
+    ];
+
+    /** A section is required unless it is a tick-box question answered in a way that needs no description. */
+    public static function sectionRequired(string $key, ?string $answer): bool
+    {
+        $choice = self::CONCEPT_CHOICES[$key] ?? null;
+
+        return $choice === null || in_array($answer, $choice['describe'], true);
+    }
 
     /** Full proposal sections. About ten pages in all, excluding references, budget and letters. */
     public const PROPOSAL_SECTIONS = [

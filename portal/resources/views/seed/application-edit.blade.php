@@ -41,15 +41,35 @@
         </div>
     </div>
 
+    @if($isConcept && $application->status === SeedGrant::DRAFT && $application->screened_at && $application->screening_note)
+        <div class="banner banner-warn" style="margin-bottom:20px; padding:16px 18px;" role="status">
+            <span class="ico" style="width:32px; height:32px; flex-basis:32px; font-size:14px;"><i class="fas fa-undo" aria-hidden="true"></i></span>
+            <div><strong>GMU returned your concept note for correction</strong>
+                <p style="font-size:14px; margin-top:2px;">{{ $application->screening_note }}</p>
+                <p class="small muted" style="margin-top:4px;">Make the change, then submit again.</p></div>
+        </div>
+    @endif
+
     <nav class="section-nav" aria-label="Sections">
         @if($isConcept)
-            <a href="#project"><span class="tick {{ $application->title && $application->mentor_name ? 'ok' : 'no' }}"><i class="fas fa-check" aria-hidden="true"></i></span>Project and mentor</a>
+            @php $aDone = $application->priorLargeGrant() === 'no' && $application->mentor_name && $application->mentor_suitability; @endphp
+            <a href="#project"><span class="tick {{ $aDone ? 'ok' : 'no' }}"><i class="fas fa-check" aria-hidden="true"></i></span>A. Applicant</a>
+            <a href="#s-title"><span class="tick {{ $application->title ? 'ok' : 'no' }}"><i class="fas fa-check" aria-hidden="true"></i></span>Title</a>
         @endif
         @foreach($sections as $key => [$heading, , $limit])
-            @php $w = SeedGrant::wordCount($application->sectionText($stage, $key)); @endphp
-            <a href="#s-{{ $key }}"><span class="tick {{ $w === 0 ? 'no' : ($w > $limit ? 'over' : 'ok') }}"><i class="fas {{ $w > $limit ? 'fa-exclamation' : 'fa-check' }}" aria-hidden="true"></i></span>{{ $heading }}</a>
+            @php
+                $w = SeedGrant::wordCount($application->sectionText($stage, $key));
+                $needed = ! $isConcept || SeedGrant::sectionRequired($key, $application->choice($key));
+                $answered = ! $isConcept || ! isset(SeedGrant::CONCEPT_CHOICES[$key]) || $application->choice($key) !== null;
+                $state = $w > $limit ? 'over' : (($w === 0 && $needed) || ! $answered ? 'no' : 'ok');
+                $short = $isConcept ? preg_replace('/^(\d+|[A-Z])\. /', '$1. ', \Illuminate\Support\Str::before($heading, ' and ')) : $heading;
+            @endphp
+            <a href="#s-{{ $key }}"><span class="tick {{ $state }}"><i class="fas {{ $state === 'over' ? 'fa-exclamation' : 'fa-check' }}" aria-hidden="true"></i></span>{{ $short }}</a>
         @endforeach
-        <a href="#budget"><span class="tick {{ $lines->isEmpty() ? 'no' : 'ok' }}"><i class="fas fa-check" aria-hidden="true"></i></span>Budget</a>
+        <a href="#budget"><span class="tick {{ $lines->isEmpty() ? 'no' : 'ok' }}"><i class="fas fa-check" aria-hidden="true"></i></span>{{ $isConcept ? 'D. Budget' : 'Budget' }}</a>
+        @if($isConcept)
+            <a href="#declaration"><span class="tick {{ count($application->declarations()) === count(SeedGrant::DECLARATIONS) ? 'ok' : 'no' }}"><i class="fas fa-check" aria-hidden="true"></i></span>E. Declaration</a>
+        @endif
         @unless($isConcept)
             <a href="#documents"><span class="tick {{ $application->documents->isEmpty() ? 'no' : 'ok' }}"><i class="fas fa-check" aria-hidden="true"></i></span>Documents</a>
         @endunless
@@ -69,44 +89,116 @@
             @endif
 
             @if($isConcept)
+                @php
+                    $pi = $application->pi;
+                    $service = $pi->serviceLength();
+                    $prior = old('prior_grant', $application->priorLargeGrant());
+                    $coInv = old('co_investigators', $application->conceptField('co_investigators'));
+                    $expertise = old('mentor_suitability', $application->mentor_suitability);
+                    $priorDetails = old('prior_grant_details', $application->conceptField('prior_grant_details'));
+                @endphp
                 <section class="card" id="project">
                     <div class="card-body">
-                        <h2 class="card-title">Project and mentor</h2>
+                        <h2 class="card-title">A. Applicant and project information</h2>
+                        <p class="small muted" style="margin-top:4px;">Your details come from your profile. If any is wrong, ask GMU to correct it.</p>
+
                         <div class="form-grid" style="margin-top:16px;">
-                            <x-ui.field label="Project title" name="title" wide>
-                                <input id="title" name="title" class="input" maxlength="255" value="{{ old('title', $application->title) }}">
-                            </x-ui.field>
-                            <x-ui.field label="Mentor’s name" name="mentor_name">
+                            <div class="kv"><span class="k">Lead applicant (PI)</span><span class="v">{{ $pi->name }}</span></div>
+                            <div class="kv"><span class="k">Current designation</span><span class="v">{{ $pi->designation ?: '—' }}</span></div>
+                            <div class="kv"><span class="k">NIMR centre</span><span class="v">{{ $pi->research_center ?: '—' }}</span></div>
+                            <div class="kv"><span class="k">Department or section</span><span class="v">{{ $pi->department ?: '—' }}</span></div>
+                            <div class="kv"><span class="k">Email</span><span class="v">{{ $pi->email }}</span></div>
+                            <div class="kv"><span class="k">Telephone</span><span class="v">{{ $pi->phone ?: '—' }}</span></div>
+                            <div class="kv"><span class="k">Employment</span><span class="v">{{ \App\Models\User::EMPLOYMENT_TYPES[$pi->employment_type] ?? '—' }}</span></div>
+                            <div class="kv"><span class="k">Date of first appointment</span>
+                                <span class="v">{{ $pi->first_appointment_date?->format('j M Y') ?? '—' }}
+                                    @if($service)<span class="small muted"> · {{ $service['years'] }} y {{ $service['months'] }} m{{ $pi->withinSeedGrantServiceLimit() ? ', under 5 years' : '' }}</span>@endif
+                                </span></div>
+                        </div>
+
+                        <fieldset class="choice-group" style="margin-top:20px;">
+                            <legend class="label">Have you previously received a research grant exceeding USD 10,000 as Principal Investigator?</legend>
+                            <div class="row" style="gap:20px; margin-top:8px;">
+                                @foreach(['no' => 'No', 'yes' => 'Yes'] as $value => $label)
+                                    <label class="check"><input type="radio" name="prior_grant" value="{{ $value }}" @checked($prior === $value) data-reveal="prior-details" data-reveal-on="yes"> <span>{{ $label }}</span></label>
+                                @endforeach
+                            </div>
+                            <div id="prior-details" @if($prior !== 'yes') hidden @endif style="margin-top:12px;">
+                                <label for="prior_grant_details" class="label">Grant title, funding organisation and amount awarded</label>
+                                <textarea id="prior_grant_details" name="prior_grant_details" class="textarea" rows="2" data-words data-limit="{{ SeedGrant::PRIOR_GRANT_WORDS }}">{{ $priorDetails }}</textarea>
+                                <div class="wordcount" data-count-for="prior_grant_details">{{ SeedGrant::wordCount($priorDetails) }} / {{ SeedGrant::PRIOR_GRANT_WORDS }} words</div>
+                                <p class="small" style="margin-top:6px; color:var(--danger-ink);">The call is open only to researchers who have not held a grant above USD 10,000 as PI.</p>
+                            </div>
+                        </fieldset>
+
+                        <div class="form-grid" style="margin-top:20px;">
+                            <x-ui.field label="Proposed scientific mentor’s full name" name="mentor_name">
                                 <input id="mentor_name" name="mentor_name" class="input" value="{{ old('mentor_name', $application->mentor_name) }}">
                             </x-ui.field>
                             <x-ui.field label="Mentor’s designation" name="mentor_designation">
                                 <input id="mentor_designation" name="mentor_designation" class="input" value="{{ old('mentor_designation', $application->mentor_designation) }}">
                             </x-ui.field>
-                            <x-ui.field label="Mentor’s centre or section" name="mentor_centre" wide>
+                            <x-ui.field label="Mentor’s NIMR centre or section" name="mentor_centre" wide>
                                 <input id="mentor_centre" name="mentor_centre" class="input" value="{{ old('mentor_centre', $application->mentor_centre) }}">
                             </x-ui.field>
-                            <x-ui.field label="Why this mentor suits the study" name="mentor_suitability" wide>
-                                <textarea id="mentor_suitability" name="mentor_suitability" class="textarea" rows="3">{{ old('mentor_suitability', $application->mentor_suitability) }}</textarea>
-                            </x-ui.field>
+                            <div class="field wide">
+                                <label for="mentor_suitability" class="label">The mentor’s expertise relevant to the proposed study</label>
+                                <textarea id="mentor_suitability" name="mentor_suitability" class="textarea" rows="2" data-words data-limit="{{ SeedGrant::MENTOR_EXPERTISE_WORDS }}">{{ $expertise }}</textarea>
+                                <div class="wordcount" data-count-for="mentor_suitability">{{ SeedGrant::wordCount($expertise) }} / {{ SeedGrant::MENTOR_EXPERTISE_WORDS }} words</div>
+                            </div>
+                            <div class="field wide">
+                                <label for="co_investigators" class="label">Proposed co-investigators or collaborators, if any</label>
+                                <p class="small muted">Names, designations and institutional affiliations.</p>
+                                <textarea id="co_investigators" name="co_investigators" class="textarea" rows="2" data-words data-limit="{{ SeedGrant::CO_INVESTIGATORS_WORDS }}">{{ $coInv }}</textarea>
+                                <div class="wordcount" data-count-for="co_investigators">{{ SeedGrant::wordCount($coInv) }} / {{ SeedGrant::CO_INVESTIGATORS_WORDS }} words</div>
+                            </div>
                         </div>
-                        <input type="hidden" name="declared_no_prior_large_grant" value="0">
-                        <label class="check" style="margin-top:16px; align-items:flex-start;">
-                            <input type="checkbox" name="declared_no_prior_large_grant" value="1" style="margin-top:2px;" @checked(old('declared_no_prior_large_grant', $application->declared_no_prior_large_grant))>
-                            <span>I have not previously held a research grant above USD 10,000 as Principal Investigator.</span>
-                        </label>
+                        <p class="small muted" style="margin-top:12px;">Total funding requested is taken from your budget below: TZS {{ number_format($call->min_amount) }} to {{ number_format($call->max_amount) }}.</p>
+                    </div>
+                </section>
+
+                <section class="card" id="s-title">
+                    <div class="card-body">
+                        <h2 class="card-title">B. Concept note technical questions</h2>
+                        <label for="title" class="label" style="margin-top:16px; display:block;">Proposed project title</label>
+                        @php $titleText = old('title', $application->title); @endphp
+                        <input id="title" name="title" class="input" maxlength="255" value="{{ $titleText }}" data-words data-limit="{{ SeedGrant::TITLE_MAX_WORDS }}">
+                        <div class="wordcount" data-count-for="title">{{ SeedGrant::wordCount($titleText) }} / {{ SeedGrant::TITLE_MAX_WORDS }} words</div>
                     </div>
                 </section>
             @endif
 
             @foreach($sections as $key => [$heading, $guidance, $limit])
-                @php $text = old("sections.$key", $application->sectionText($stage, $key)); @endphp
+                @php
+                    $text = old("sections.$key", $application->sectionText($stage, $key));
+                    $choice = $isConcept ? (SeedGrant::CONCEPT_CHOICES[$key] ?? null) : null;
+                    $answer = $choice ? old("choices.$key", $application->choice($key)) : null;
+                    $showText = ! $choice || in_array($answer, $choice['describe'], true);
+                @endphp
                 <section class="card" id="s-{{ $key }}">
                     <div class="card-body">
-                        <label for="sec-{{ $key }}" class="card-title" style="display:block;">{{ $heading }}</label>
-                        @if($guidance)<p class="small muted" style="margin-top:4px;">{{ $guidance }}</p>@endif
-                        <textarea id="sec-{{ $key }}" name="sections[{{ $key }}]" class="textarea" rows="7" style="margin-top:12px;"
-                                  data-words data-limit="{{ $limit }}">{{ $text }}</textarea>
-                        <div class="wordcount" data-count-for="sec-{{ $key }}">{{ SeedGrant::wordCount($text) }} / {{ $limit }} words</div>
+                        @if($choice)
+                            <fieldset class="choice-group">
+                                <legend class="card-title">{{ $heading }}</legend>
+                                <p class="small" style="margin-top:4px;">{{ $choice['question'] }}</p>
+                                <div class="row" style="gap:20px; margin-top:8px;">
+                                    @foreach($choice['options'] as $value => $label)
+                                        <label class="check"><input type="radio" name="choices[{{ $key }}]" value="{{ $value }}" @checked($answer === $value)
+                                               data-reveal="describe-{{ $key }}" data-reveal-on="{{ implode(',', $choice['describe']) }}"> <span>{{ $label }}</span></label>
+                                    @endforeach
+                                </div>
+                            </fieldset>
+                            <div id="describe-{{ $key }}" @unless($showText) hidden @endunless style="margin-top:12px;">
+                                <label for="sec-{{ $key }}" class="label">{{ $guidance }}</label>
+                        @else
+                            <div>
+                                <label for="sec-{{ $key }}" class="card-title" style="display:block;">{{ $heading }}</label>
+                                @if($guidance)<p class="small muted" style="margin-top:4px;">{{ $guidance }}</p>@endif
+                        @endif
+                                <textarea id="sec-{{ $key }}" name="sections[{{ $key }}]" class="textarea" rows="{{ $limit <= 150 ? 4 : 7 }}" style="margin-top:12px;"
+                                          data-words data-page data-limit="{{ $limit }}">{{ $text }}</textarea>
+                                <div class="wordcount" data-count-for="sec-{{ $key }}">{{ SeedGrant::wordCount($text) }} / {{ $limit }} words</div>
+                            </div>
                     </div>
                 </section>
             @endforeach
@@ -114,7 +206,7 @@
             <section class="card" id="budget">
                 <div class="card-body">
                     <div class="row-between">
-                        <h2 class="card-title">{{ $isConcept ? 'Estimated budget' : 'Detailed budget' }}</h2>
+                        <h2 class="card-title">{{ $isConcept ? 'D. Estimated budget' : 'Detailed budget' }}</h2>
                         <span class="small muted">{{ $isConcept ? 'A detailed quarterly budget comes at stage 2.' : 'From the NIMR finance template: four categories by quarter.' }}</span>
                     </div>
                     <div class="table-wrap" style="margin-top:12px;">
@@ -169,6 +261,25 @@
                     </div>
                 </div>
             </section>
+
+            @if($isConcept)
+                @php $ticked = old('declarations', $application->declarations()); @endphp
+                <section class="card" id="declaration">
+                    <div class="card-body">
+                        <h2 class="card-title">E. Applicant declaration</h2>
+                        <p class="small muted" style="margin-top:4px;">Tick every statement. Submitting from your account stands as your signature and date.</p>
+                        <div class="stack-sm" style="margin-top:14px;">
+                            @foreach(SeedGrant::DECLARATIONS as $value => $statement)
+                                <label class="check" style="align-items:flex-start;">
+                                    <input type="checkbox" name="declarations[]" value="{{ $value }}" style="margin-top:3px;" @checked(in_array($value, (array) $ticked, true))>
+                                    <span>{{ $statement }}</span>
+                                </label>
+                            @endforeach
+                        </div>
+                        <p class="small muted" style="margin-top:14px;">Applicant: <strong>{{ $application->pi->name }}</strong></p>
+                    </div>
+                </section>
+            @endif
         </div>
 
         <aside class="stack-sm" style="gap:16px;">
@@ -248,7 +359,7 @@
         var all = 0;
         areas.forEach(function (a) {
             var w = words(a.value), limit = +a.dataset.limit, out = document.querySelector('[data-count-for="' + a.id + '"]');
-            all += w;
+            if (a.hasAttribute('data-page')) all += w;
             out.textContent = w + ' / ' + limit + ' words';
             out.classList.toggle('over', w > limit);
         });
@@ -293,6 +404,14 @@
         });
         last.parentNode.appendChild(next);
         next.querySelector('input').focus();
+    });
+
+    // Questions that ask for a description only for some answers (prior grant, 7 and 8).
+    document.querySelectorAll('[data-reveal]').forEach(function (radio) {
+        radio.addEventListener('change', function () {
+            var target = document.getElementById(radio.dataset.reveal);
+            if (target && radio.checked) target.hidden = radio.dataset.revealOn.split(',').indexOf(radio.value) === -1;
+        });
     });
 
     updateWords();

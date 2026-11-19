@@ -134,6 +134,34 @@ class SeedApplication extends Model
         return (string) (($stage === 'proposal' ? $this->proposal : $this->concept)[$key] ?? '');
     }
 
+    /** Any other concept-note answer kept in the concept JSON (Section A extras, tick-boxes, declarations). */
+    public function conceptField(string $key): mixed
+    {
+        return ($this->concept ?? [])[$key] ?? null;
+    }
+
+    /** The tick-box answer to question 7 or 8 (SeedGrant::CONCEPT_CHOICES). */
+    public function choice(string $key): ?string
+    {
+        $answer = $this->conceptField($key . '_answer');
+
+        return is_string($answer) && $answer !== '' ? $answer : null;
+    }
+
+    /** Section E boxes the applicant has ticked. */
+    public function declarations(): array
+    {
+        return array_values(array_intersect(array_keys(SeedGrant::DECLARATIONS), (array) ($this->conceptField('declarations') ?? [])));
+    }
+
+    /** "yes", "no" or null: has the applicant held a research grant above USD 10,000 as PI? */
+    public function priorLargeGrant(): ?string
+    {
+        $answer = $this->conceptField('prior_grant');
+
+        return in_array($answer, ['yes', 'no'], true) ? $answer : null;
+    }
+
     public function wordCount(string $stage): int
     {
         $words = 0;

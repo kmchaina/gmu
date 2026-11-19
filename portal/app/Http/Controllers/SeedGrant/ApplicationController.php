@@ -111,13 +111,22 @@ class ApplicationController extends Controller
             $sectionRules["sections.{$key}"] = ['nullable', 'string', 'max:20000'];
         }
 
-        $data = $request->validate($sectionRules + [
+        $choiceRules = [];
+        foreach (SeedGrant::CONCEPT_CHOICES as $key => $choice) {
+            $choiceRules["choices.{$key}"] = ['nullable', Rule::in(array_keys($choice['options']))];
+        }
+
+        $data = $request->validate($sectionRules + $choiceRules + [
             'title'                         => ['nullable', 'string', 'max:255'],
             'mentor_name'                   => ['nullable', 'string', 'max:255'],
             'mentor_designation'            => ['nullable', 'string', 'max:255'],
             'mentor_centre'                 => ['nullable', 'string', 'max:255'],
             'mentor_suitability'            => ['nullable', 'string', 'max:3000'],
-            'declared_no_prior_large_grant' => ['nullable', 'boolean'],
+            'co_investigators'              => ['nullable', 'string', 'max:5000'],
+            'prior_grant'                   => ['nullable', Rule::in(['yes', 'no'])],
+            'prior_grant_details'           => ['nullable', 'string', 'max:3000'],
+            'declarations'                  => ['nullable', 'array'],
+            'declarations.*'                => [Rule::in(array_keys(SeedGrant::DECLARATIONS))],
             'budget'                        => ['nullable', 'array', 'max:60'],
             'budget.*.item'                 => ['nullable', 'string', 'max:255'],
             'budget.*.category'             => ['nullable', Rule::in(array_keys(SeedGrant::BUDGET_CATEGORIES))],
@@ -130,19 +139,34 @@ class ApplicationController extends Controller
 
         $sections = array_map(fn ($v) => trim((string) $v), $data['sections'] ?? []);
         $existing = ($stage === 'proposal' ? $application->proposal : $application->concept) ?? [];
-        $application->{$stage} = array_merge($existing, $sections);
 
         // The concept-stage fields are fixed once the concept note is shortlisted.
         if ($stage === 'concept') {
+            foreach (array_keys(SeedGrant::CONCEPT_CHOICES) as $key) {
+                $answer = $data['choices'][$key] ?? null;
+                $sections[$key . '_answer'] = $answer;
+                // "No" to question 7 or 8 needs no description: drop any left over.
+                if ($answer !== null && ! SeedGrant::sectionRequired($key, $answer)) {
+                    $sections[$key] = '';
+                }
+            }
+            $sections['co_investigators']    = trim((string) ($data['co_investigators'] ?? ''));
+            $sections['prior_grant']         = $data['prior_grant'] ?? null;
+            $sections['prior_grant_details'] = ($data['prior_grant'] ?? null) === 'yes' ? trim((string) ($data['prior_grant_details'] ?? '')) : '';
+            $sections['declarations']        = array_values(array_unique($data['declarations'] ?? []));
+
             $application->fill([
                 'title'                         => $data['title'] ?? $application->title,
                 'mentor_name'                   => $data['mentor_name'] ?? null,
                 'mentor_designation'            => $data['mentor_designation'] ?? null,
                 'mentor_centre'                 => $data['mentor_centre'] ?? null,
                 'mentor_suitability'            => $data['mentor_suitability'] ?? null,
-                'declared_no_prior_large_grant' => (bool) ($data['declared_no_prior_large_grant'] ?? false),
+                // Kept in step for screening and reports: true only when the applicant answered "No".
+                'declared_no_prior_large_grant' => ($data['prior_grant'] ?? null) === 'no',
             ]);
         }
+
+        $application->{$stage} = array_merge($existing, $sections);
         $application->save();
 
         if ($request->has('budget')) {

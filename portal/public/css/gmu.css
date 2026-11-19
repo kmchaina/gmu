@@ -387,6 +387,10 @@ a.list-row:hover { background:#FAFBFD; text-decoration:none; color:inherit; }
   body { background:#fff; }
 }
 
+/* concept note tick-box questions */
+fieldset.choice-group { border:0; margin:0; padding:0; min-width:0; }
+fieldset.choice-group legend { padding:0; }
+
 /* ---- small screens: the side panel slides in over the page -------------- */
 @media (max-width:900px) {
   .menu-btn { display:grid; }
